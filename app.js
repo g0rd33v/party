@@ -290,7 +290,7 @@ function renderNeedsIdentity(roomHandle, fragData) {
   app.innerHTML = `
     <div class="center-state">
       ${hostAvatarSeed ? `
-        <div class="identity-avatar" style="width:96px;height:96px;margin:0 auto 16px;font-size:60px;">
+        <div class="identity-avatar" style="width:96px;height:96px;margin:0 auto 16px;">
           ${avatarSvg(hostAvatarSeed)}
         </div>
       ` : ''}
