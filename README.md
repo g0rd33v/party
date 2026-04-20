@@ -64,9 +64,11 @@ Every file has a single responsibility. `app.js` only wires DOM events to module
 ## URL format
 
 ```
-Path:     /party/<handle>              ← identity (always works)
-Fragment: #s=SID&a=AVATAR&t=TIMESTAMP  ← live connection info
-Query:    ?sig=wss://my-broker/mqtt    ← optional signaling override
+Path:     /party/<handle>                ← identity (always works)
+Fragment: #s=SID&a=AVATAR&t=TIMESTAMP    ← live connection info
+Query:    ?sig=wss://my-broker/mqtt      ← optional signaling override
+          ?turn=turn:my-turn:3478        ← optional TURN relay
+          &turn_user=X&turn_pass=Y         (with creds when required)
 ```
 
 | Field | Purpose |
@@ -75,6 +77,8 @@ Query:    ?sig=wss://my-broker/mqtt    ← optional signaling override
 | `a` | Host avatar seed (first 16 hex chars) — guests render the host's face instantly, before any network traffic |
 | `t` | Timestamp when the fragment was written — freshness signal |
 | `sig` | Override the default MQTT broker URL. Both peers must point at the same broker to discover each other. |
+| `turn` | Add a TURN relay server for WebRTC to fall back on when direct P2P fails (symmetric NAT, corporate firewalls). Optional — most networks don't need it. |
+| `turn_user` / `turn_pass` | TURN credentials when the server requires auth. |
 
 Hosts continuously maintain the fragment while their party is live. Any copy of the URL at any moment contains up-to-date connection info. No separate "Share" click needed — select the URL bar, copy, paste anywhere.
 
@@ -93,6 +97,25 @@ WebRTC peers need a signaling channel to exchange SDP offers before they can con
 | **MQTT topics** | One broker, one topic, every subscriber meets every publisher. Stable public brokers (EMQX, HiveMQ, Mosquitto) | ✓ |
 
 Default broker: `wss://broker.emqx.io:8084/mqtt`. Override per session with `?sig=wss://my-broker:port/mqtt`. Self-hosted Mosquitto works — 5MB, in every Linux repo, 5 minutes to stand up.
+
+---
+
+## Relay: TURN (optional)
+
+Most peer connections complete directly via STUN (Google's public STUN servers are baked in). But some networks block direct WebRTC:
+
+- Symmetric NAT on some cellular carriers and corporate networks
+- Hotel / cafe / airport Wi-Fi that drops UDP
+- Two browsers on the same origin in some Chrome versions (a testing-only issue)
+
+For these cases, a TURN server relays the traffic. Party has no built-in TURN — the free-for-anyone public TURN ecosystem (`openrelay.metered.ca`, `expressturn`, etc.) effectively died in 2024–2025, so hardcoding them costs every connection a 5-second gathering timeout for zero benefit.
+
+**If you need relay for your users**, two clean paths:
+
+1. **Self-host coturn** — $5/month VPS, 20 minutes to set up. Share links that include `?turn=turn:your-coturn.example.com:3478&turn_user=name&turn_pass=secret`.
+2. **Cloudflare Realtime TURN** — free tier, requires a Worker to mint short-lived ICE credentials. Same URL-param pattern, generated tokens instead of static creds.
+
+Without TURN, ~95% of real-world peer pairs connect fine via STUN. The missing 5% are users on the hostile networks above. For them, the URL-param pattern means *any* party link with `?turn=...` appended Just Works — no app redeploy, no config.
 
 ---
 
