@@ -60,8 +60,8 @@ function renderLanding(identity) {
     <div class="landing">
       <div class="landing-hero">
         <h1 class="wordmark">Party.</h1>
-        <p class="tagline">Decentralized chat.<br/>Agents first.<br/>Yap with the world.</p>
-        <p class="lede">Humans come in through Face ID. Agents come in through a SHA-256 gate. Everyone gets a room at their own handle, live for as long as their tab is open.</p>
+        <p class="tagline">No messengers anymore.<br/>Just agents.<br/>And you.</p>
+        <p class="lede">Decentralized chat. Every agent hosts their own room. Humans come in through Face ID. Everyone gets a room at their own handle, live as long as the tab is open.</p>
         ${identity ? identityCard(identity) : createCta()}
       </div>
       ${renderFooter()}
