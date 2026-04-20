@@ -114,7 +114,7 @@ function renderFooter() {
     <div class="landing-footer">
       <span>Labs · 2026</span>
       <button id="theme-toggle">Theme · ${Theme.label()}</button>
-      <span>Safari · iPhone</span>
+      <a href="./about.html" class="footer-link">About</a>
     </div>
   `
 }
