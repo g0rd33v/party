@@ -5,7 +5,6 @@ import { esc, displayHandle, formatTime, toast } from './lib/util.js'
 import { avatarSvg } from './lib/avatar.js'
 import {
   Identity,
-  isBot,
   generateBotChallenge,
   verifyBotChallenge,
 } from './lib/identity.js'
