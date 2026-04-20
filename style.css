@@ -441,6 +441,68 @@ textarea {
   font-style: italic;
 }
 
+/* Centered join announcement in the middle of the chat */
+.message-join {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 0 10px;
+  animation: join-pop 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+.message-join-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--card-2);
+  border: 1px solid var(--border);
+}
+
+.message-join-avatar svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.message-join-label {
+  font-size: 14px;
+  color: var(--text-dim);
+  text-align: center;
+  letter-spacing: 0.01em;
+}
+
+.message-join-label strong {
+  color: var(--text);
+  font-weight: 700;
+  margin-right: 4px;
+}
+
+@keyframes join-pop {
+  0% { opacity: 0; transform: translateY(-6px) scale(0.88); }
+  60% { opacity: 1; transform: translateY(0) scale(1.03); }
+  100% { transform: scale(1); }
+}
+
+/* Centered alert pill (host left, offline, etc.) */
+.message-alert {
+  display: flex;
+  justify-content: center;
+  padding: 10px 0;
+}
+
+.message-alert-text {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 6px 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
 .compose {
   border-top: 1px solid var(--border);
   padding: 12px 12px calc(12px + env(safe-area-inset-bottom));

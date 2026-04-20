@@ -168,104 +168,115 @@ function toast(msg, ms = 2200) {
   toast._t = setTimeout(() => el.classList.remove('show'), ms)
 }
 
-// ---------- Avatar (party-themed SVG, 10 icons × deterministic color) ----------
+// ---------- Avatar (pixel emoji faces: 6 attrs × 6 variants = 46,656 combos) ----------
 
-const AVATAR_ICONS = [
-  // 0 — balloon
-  (p, a) => `
-    <ellipse cx="48" cy="38" rx="22" ry="26" fill="${p}"/>
-    <ellipse cx="40" cy="30" rx="5" ry="7" fill="${a}" opacity="0.55"/>
-    <path d="M 44 62 L 52 62 L 50 70 L 46 70 Z" fill="${p}"/>
-    <path d="M 48 70 Q 54 80 46 90" stroke="${a}" stroke-width="1.5" fill="none"/>`,
-  // 1 — star
-  (p, a) => `
-    <polygon points="48,14 56,38 82,38 61,54 69,80 48,64 27,80 35,54 14,38 40,38" fill="${p}"/>
-    <circle cx="48" cy="46" r="5" fill="${a}"/>`,
-  // 2 — cake
-  (p, a) => `
-    <rect x="18" y="50" width="60" height="28" fill="${p}" rx="2"/>
-    <rect x="18" y="58" width="60" height="4" fill="${a}" opacity="0.55"/>
-    <rect x="28" y="38" width="40" height="14" fill="${a}" rx="1"/>
-    <rect x="46" y="22" width="4" height="16" fill="${a}"/>
-    <ellipse cx="48" cy="18" rx="3" ry="5" fill="#ffa33d"/>`,
-  // 3 — party hat
-  (p, a) => `
-    <polygon points="48,14 22,80 74,80" fill="${p}"/>
-    <rect x="30" y="44" width="36" height="3" fill="${a}"/>
-    <rect x="26" y="62" width="44" height="3" fill="${a}"/>
-    <circle cx="48" cy="12" r="7" fill="${a}"/>`,
-  // 4 — cocktail
-  (p, a) => `
-    <polygon points="20,22 76,22 48,58" fill="${p}"/>
-    <rect x="46" y="58" width="4" height="18" fill="${a}"/>
-    <rect x="30" y="76" width="36" height="4" fill="${a}" rx="1"/>
-    <circle cx="60" cy="30" r="4" fill="#d84c4c"/>
-    <line x1="60" y1="30" x2="70" y2="18" stroke="${a}" stroke-width="1.5"/>`,
-  // 5 — disco ball
-  (p, a) => `
-    <circle cx="48" cy="48" r="30" fill="${p}"/>
-    <path d="M 20 48 Q 48 36 76 48" stroke="${a}" stroke-width="1.5" fill="none" opacity="0.5"/>
-    <path d="M 20 48 Q 48 60 76 48" stroke="${a}" stroke-width="1.5" fill="none" opacity="0.5"/>
-    <line x1="48" y1="20" x2="48" y2="76" stroke="${a}" stroke-width="1" opacity="0.45"/>
-    <line x1="30" y1="26" x2="30" y2="70" stroke="${a}" stroke-width="1" opacity="0.45"/>
-    <line x1="66" y1="26" x2="66" y2="70" stroke="${a}" stroke-width="1" opacity="0.45"/>
-    <circle cx="38" cy="38" r="4" fill="#fff" opacity="0.7"/>`,
-  // 6 — music note
-  (p, a) => `
-    <ellipse cx="34" cy="66" rx="9" ry="7" fill="${p}" transform="rotate(-18 34 66)"/>
-    <ellipse cx="64" cy="60" rx="9" ry="7" fill="${p}" transform="rotate(-18 64 60)"/>
-    <rect x="42" y="22" width="3" height="44" fill="${p}"/>
-    <rect x="72" y="16" width="3" height="44" fill="${p}"/>
-    <polygon points="42,22 75,16 75,30 42,36" fill="${p}"/>
-    <polygon points="42,36 75,30 75,38 42,44" fill="${a}" opacity="0.7"/>`,
-  // 7 — gift
-  (p, a) => `
-    <rect x="18" y="36" width="60" height="48" fill="${p}" rx="2"/>
-    <rect x="18" y="36" width="60" height="8" fill="${a}"/>
-    <rect x="44" y="36" width="8" height="48" fill="${a}"/>
-    <path d="M 48 36 C 36 24 24 30 30 36 Z" fill="${a}"/>
-    <path d="M 48 36 C 60 24 72 30 66 36 Z" fill="${a}"/>`,
-  // 8 — firework
-  (p, a) => {
-    let rays = ''
-    for (let i = 0; i < 8; i++) {
-      const angle = (i * Math.PI) / 4
-      const x2 = (48 + Math.cos(angle) * 30).toFixed(1)
-      const y2 = (48 + Math.sin(angle) * 30).toFixed(1)
-      const cx = (48 + Math.cos(angle) * 34).toFixed(1)
-      const cy = (48 + Math.sin(angle) * 34).toFixed(1)
-      const c = i % 2 === 0 ? p : a
-      rays += `<line x1="48" y1="48" x2="${x2}" y2="${y2}" stroke="${c}" stroke-width="2.5" stroke-linecap="round"/><circle cx="${cx}" cy="${cy}" r="3" fill="${c}"/>`
-    }
-    return `${rays}<circle cx="48" cy="48" r="4" fill="#fff"/>`
-  },
-  // 9 — confetti
-  (p, a) => `
-    <rect x="14" y="20" width="8" height="3" fill="${p}" transform="rotate(30 18 21)"/>
-    <rect x="72" y="24" width="8" height="3" fill="${a}" transform="rotate(-15 76 26)"/>
-    <rect x="40" y="14" width="7" height="3" fill="${a}" transform="rotate(60 44 15)"/>
-    <circle cx="28" cy="40" r="3" fill="${a}"/>
-    <circle cx="68" cy="52" r="3" fill="${p}"/>
-    <circle cx="20" cy="68" r="2.5" fill="${p}"/>
-    <rect x="52" y="70" width="8" height="3" fill="${p}" transform="rotate(20 56 72)"/>
-    <rect x="72" y="74" width="6" height="3" fill="${a}" transform="rotate(-30 75 75)"/>
-    <rect x="36" y="78" width="7" height="3" fill="${a}" transform="rotate(50 39 79)"/>
-    <circle cx="48" cy="38" r="2" fill="${p}"/>
-    <circle cx="58" cy="28" r="2" fill="${p}"/>
-    <rect x="14" y="54" width="6" height="3" fill="${p}" transform="rotate(-20 17 55)"/>`,
-]
+const AVATAR_FACES = {
+  // 6 head colors — party-bright
+  colors: [
+    '#ff6ba8', // hot pink
+    '#5eb8ff', // sky blue
+    '#6be0a8', // mint
+    '#ffd84a', // sunny yellow
+    '#ff9255', // coral orange
+    '#b489ff', // lavender
+  ],
+
+  // 6 hair styles (clipped to head circle)
+  hair: [
+    // 0 — short strip
+    `<path d="M 12 30 Q 12 14 48 11 Q 84 14 84 30 L 84 34 L 12 34 Z" fill="#2a1f1a"/>`,
+    // 1 — long (drapes down sides)
+    `<path d="M 10 30 Q 10 10 48 9 Q 86 10 86 30 L 86 62 L 74 62 L 74 34 L 22 34 L 22 62 L 10 62 Z" fill="#2a1f1a"/>`,
+    // 2 — curly puffs
+    `<g fill="#2a1f1a"><circle cx="22" cy="22" r="10"/><circle cx="36" cy="14" r="10"/><circle cx="50" cy="11" r="10"/><circle cx="64" cy="14" r="10"/><circle cx="76" cy="22" r="10"/><rect x="14" y="22" width="68" height="12"/></g>`,
+    // 3 — spiky
+    `<g fill="#2a1f1a"><polygon points="14,34 24,10 32,34"/><polygon points="30,34 42,6 50,34"/><polygon points="46,34 58,6 66,34"/><polygon points="62,34 72,10 82,34"/></g>`,
+    // 4 — bald
+    ``,
+    // 5 — mohawk
+    `<g fill="#2a1f1a"><rect x="40" y="10" width="16" height="26"/><polygon points="40,10 56,10 52,2 44,2"/></g>`,
+  ],
+
+  // 6 eyes
+  eyes: [
+    // 0 — round dots
+    `<rect x="32" y="42" width="4" height="5" fill="#2a1f1a"/><rect x="60" y="42" width="4" height="5" fill="#2a1f1a"/>`,
+    // 1 — wide with whites
+    `<rect x="28" y="40" width="10" height="10" fill="#fff"/><rect x="31" y="42" width="5" height="6" fill="#2a1f1a"/><rect x="58" y="40" width="10" height="10" fill="#fff"/><rect x="61" y="42" width="5" height="6" fill="#2a1f1a"/>`,
+    // 2 — happy arcs
+    `<path d="M 28 46 Q 34 40 40 46" stroke="#2a1f1a" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M 56 46 Q 62 40 68 46" stroke="#2a1f1a" stroke-width="3" fill="none" stroke-linecap="round"/>`,
+    // 3 — pixel X
+    `<g fill="#2a1f1a"><rect x="30" y="41" width="10" height="2" transform="rotate(45 35 42)"/><rect x="30" y="41" width="10" height="2" transform="rotate(-45 35 42)"/><rect x="58" y="41" width="10" height="2" transform="rotate(45 63 42)"/><rect x="58" y="41" width="10" height="2" transform="rotate(-45 63 42)"/></g>`,
+    // 4 — stars
+    `<g fill="#ffdc4a" stroke="#2a1f1a" stroke-width="1"><polygon points="34,38 35.5,43 40,43 36,46 38,51 34,48 30,51 32,46 28,43 32.5,43"/><polygon points="62,38 63.5,43 68,43 64,46 66,51 62,48 58,51 60,46 56,43 60.5,43"/></g>`,
+    // 5 — hearts
+    `<g fill="#ff3a70"><path d="M 34 49 L 28 43 Q 27 39 31 39 Q 34 39 34 42 Q 34 39 37 39 Q 41 39 40 43 Z"/><path d="M 62 49 L 56 43 Q 55 39 59 39 Q 62 39 62 42 Q 62 39 65 39 Q 69 39 68 43 Z"/></g>`,
+  ],
+
+  // 6 noses
+  nose: [
+    `<rect x="47" y="55" width="2" height="2" fill="#2a1f1a" opacity="0.55"/>`,
+    `<rect x="47" y="52" width="2" height="6" fill="#2a1f1a" opacity="0.5"/>`,
+    `<polygon points="48,52 45,58 51,58" fill="#2a1f1a" opacity="0.55"/>`,
+    ``,
+    `<path d="M 45 53 Q 48 60 51 53" stroke="#2a1f1a" stroke-width="1.5" fill="none" opacity="0.55" stroke-linecap="round"/>`,
+    `<rect x="45" y="56" width="2" height="2" fill="#2a1f1a" opacity="0.55"/><rect x="49" y="56" width="2" height="2" fill="#2a1f1a" opacity="0.55"/>`,
+  ],
+
+  // 6 mouths
+  mouth: [
+    `<path d="M 38 66 Q 48 74 58 66" stroke="#2a1f1a" stroke-width="2.5" fill="none" stroke-linecap="round"/>`,
+    `<path d="M 36 64 Q 48 76 60 64 Z" fill="#2a1f1a"/><rect x="40" y="65" width="16" height="3" fill="#fff"/>`,
+    `<ellipse cx="48" cy="68" rx="4" ry="5" fill="#2a1f1a"/>`,
+    `<path d="M 38 64 Q 48 71 58 64" stroke="#2a1f1a" stroke-width="2.5" fill="none" stroke-linecap="round"/><ellipse cx="52" cy="70" rx="3" ry="4" fill="#ff3a70"/>`,
+    `<rect x="40" y="66" width="16" height="2.5" fill="#2a1f1a" rx="1"/>`,
+    `<polyline points="38,66 42,64 46,68 50,64 54,68 58,66" stroke="#2a1f1a" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`,
+  ],
+
+  // 6 accessories (not clipped — can extend outside head)
+  accessory: [
+    // 0 — party hat
+    `<g><polygon points="48,2 36,22 60,22" fill="#ff3a70"/><circle cx="48" cy="2" r="3.5" fill="#ffdc4a"/><rect x="40" y="12" width="16" height="2" fill="#ffdc4a"/></g>`,
+    // 1 — sunglasses
+    `<g><rect x="22" y="40" width="22" height="10" fill="#151515" rx="2"/><rect x="52" y="40" width="22" height="10" fill="#151515" rx="2"/><rect x="44" y="43" width="8" height="2" fill="#151515"/><rect x="26" y="42" width="6" height="2" fill="#444" opacity="0.7"/><rect x="56" y="42" width="6" height="2" fill="#444" opacity="0.7"/></g>`,
+    // 2 — crown
+    `<g fill="#ffdc4a" stroke="#2a1f1a" stroke-width="1"><polygon points="18,28 26,12 34,24 40,8 48,24 56,8 62,24 70,12 78,28"/><rect x="18" y="26" width="60" height="5"/><circle cx="30" cy="17" r="2" fill="#ff3a70"/><circle cx="48" cy="14" r="2" fill="#5eb8ff"/><circle cx="66" cy="17" r="2" fill="#6be0a8"/></g>`,
+    // 3 — masquerade mask
+    `<g><path d="M 22 42 Q 26 34 34 36 Q 44 36 48 44 Q 52 36 62 36 Q 70 34 74 42 Q 74 48 64 50 Q 54 50 48 46 Q 42 50 32 50 Q 22 48 22 42 Z" fill="#8a3dff" stroke="#2a1f1a" stroke-width="1"/><rect x="32" y="42" width="4" height="4" fill="#151515"/><rect x="60" y="42" width="4" height="4" fill="#151515"/></g>`,
+    // 4 — headphones
+    `<g><path d="M 14 48 Q 14 10 48 10 Q 82 10 82 48" stroke="#2a1f1a" stroke-width="4" fill="none"/><rect x="8" y="40" width="14" height="22" rx="3" fill="#ff3a70"/><rect x="74" y="40" width="14" height="22" rx="3" fill="#ff3a70"/></g>`,
+    // 5 — none
+    ``,
+  ],
+}
 
 function avatarSvg(seedHex) {
-  if (!seedHex) seedHex = '0'.repeat(32)
-  const iconIdx = parseInt(seedHex.slice(0, 2), 16) % AVATAR_ICONS.length
-  const hue = Math.floor((parseInt(seedHex.slice(2, 4), 16) / 255) * 360)
-  const accentOffset = 30 + (parseInt(seedHex.slice(4, 6), 16) % 90)
-  const accentHue = (hue + accentOffset) % 360
-  const primary = `hsl(${hue}, 72%, 62%)`
-  const accent = `hsl(${accentHue}, 72%, 75%)`
-  const bg = `hsl(${hue}, 38%, 14%)`
-  const body = AVATAR_ICONS[iconIdx](primary, accent)
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><rect width="96" height="96" fill="${bg}"/>${body}</svg>`
+  if (!seedHex || seedHex.length < 12) seedHex = '0'.repeat(32)
+  const cIdx = parseInt(seedHex.slice(0, 2), 16) % 6
+  const hIdx = parseInt(seedHex.slice(2, 4), 16) % 6
+  const eIdx = parseInt(seedHex.slice(4, 6), 16) % 6
+  const nIdx = parseInt(seedHex.slice(6, 8), 16) % 6
+  const mIdx = parseInt(seedHex.slice(8, 10), 16) % 6
+  const aIdx = parseInt(seedHex.slice(10, 12), 16) % 6
+
+  const headColor = AVATAR_FACES.colors[cIdx]
+  const bgHue = (cIdx * 60 + 20) % 360
+  const bg = `hsl(${bgHue}, 30%, 13%)`
+
+  // Unique clip id per render (avoids DOM collision across many avatars)
+  avatarSvg._n = (avatarSvg._n || 0) + 1
+  const clipId = `hc-${seedHex.slice(0, 10)}-${avatarSvg._n}`
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+    <defs><clipPath id="${clipId}"><circle cx="48" cy="48" r="38"/></clipPath></defs>
+    <rect width="96" height="96" fill="${bg}"/>
+    <circle cx="48" cy="48" r="38" fill="${headColor}"/>
+    <g clip-path="url(#${clipId})">${AVATAR_FACES.hair[hIdx]}</g>
+    ${AVATAR_FACES.eyes[eIdx]}
+    ${AVATAR_FACES.nose[nIdx]}
+    ${AVATAR_FACES.mouth[mIdx]}
+    ${AVATAR_FACES.accessory[aIdx]}
+  </svg>`
 }
 
 // Display helper: "big-red-apple" → "Big Red Apple"
@@ -273,7 +284,6 @@ function displayHandle(handle) {
   if (!handle) return ''
   return handle.split('-').map(w => w ? w[0].toUpperCase() + w.slice(1) : '').join(' ')
 }
-
 // ---------- Identity (WebAuthn + Face ID) ----------
 
 const Identity = {
@@ -791,7 +801,15 @@ function renderParty(roomHandle, me) {
 
     messagesEl.innerHTML = list.map(m => {
       if (m.system) {
-        return `<div class="message system"><div class="message-body"><div class="message-text">${esc(m.text)}</div></div></div>`
+        if (m.kind === 'join') {
+          return `
+            <div class="message-join">
+              <div class="message-join-avatar">${avatarSvg(m.joinAvatarSeed)}</div>
+              <div class="message-join-label"><strong>${esc(displayHandle(m.joinHandle))}</strong> joined the party</div>
+            </div>
+          `
+        }
+        return `<div class="message-alert"><div class="message-alert-text">${esc(m.text)}</div></div>`
       }
       return `
         <div class="message">
@@ -874,11 +892,13 @@ function renderParty(roomHandle, me) {
     }
     updateStatus()
   }
-  mesh.onPeerJoined = (handle /*, avatarSeed */) => {
+  mesh.onPeerJoined = (handle, avatarSeed) => {
     addMessage({
       id: `sys-join-${handle}-${Date.now()}`,
       room: roomHandle,
-      text: `${displayHandle(handle)} joined the party`,
+      kind: 'join',
+      joinHandle: handle,
+      joinAvatarSeed: avatarSeed,
       ts: Date.now(),
       system: true,
     }, false)
