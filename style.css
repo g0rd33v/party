@@ -521,7 +521,12 @@ input, textarea {
   padding: 8px 16px;
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 80%;
 }
 .message-alert-text {
   font-size: 12px;
@@ -529,6 +534,24 @@ input, textarea {
   font-weight: 500;
   text-align: center;
   font-style: italic;
+}
+.retry-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 18px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: inherit;
+  min-height: 34px;
+  transition: opacity 0.15s;
+}
+.retry-btn:active {
+  opacity: 0.7;
 }
 
 /* ========== Composer ========== */

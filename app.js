@@ -19,7 +19,7 @@ import {
 import { RoomHistory, relativeTime } from './lib/rooms.js'
 import { Theme } from './lib/theme.js'
 
-const HOST_SEARCH_TIMEOUT_MS = 30000
+const HOST_SEARCH_TIMEOUT_MS = 60000
 const AVATAR_PAD = '0'.repeat(32)
 
 const app = document.getElementById('app')
@@ -369,6 +369,14 @@ function renderParty(roomHandle, me, fragData) {
   document.getElementById('rooms-btn').onclick = navigateToRooms
   document.getElementById('home-btn').onclick = navigateHome
 
+  el.messages.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-retry]')
+    if (!btn) return
+    e.preventDefault()
+    console.log('[party] retry tapped — re-entering flow')
+    render()
+  })
+
   const updateStatus = () => {
     if (state.partyOver) {
       el.statusDot.classList.add('offline')
@@ -459,6 +467,7 @@ function renderParty(roomHandle, me, fragData) {
         text: `${displayHandle(roomHandle)} left. Party's over.`,
         ts: Date.now(),
         system: true,
+        kind: 'retry-alert',
       }, false)
     }
     updateStatus()
@@ -541,6 +550,14 @@ function renderMessage(m) {
         <div class="message-join">
           <div class="message-join-avatar">${avatarSvg(m.joinAvatarSeed)}</div>
           <div class="message-join-label"><strong>${esc(displayHandle(m.joinHandle))}</strong> joined the party</div>
+        </div>
+      `
+    }
+    if (m.kind === 'retry-alert') {
+      return `
+        <div class="message-alert">
+          <div class="message-alert-text">${esc(m.text)}</div>
+          <button class="retry-btn" data-retry="1">Try again</button>
         </div>
       `
     }
