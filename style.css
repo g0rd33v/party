@@ -1,17 +1,75 @@
-/* Party — Atom.me dark system */
+/* Party — design system
+   Dark by default. Light theme via prefers-color-scheme or [data-theme="light"].
+   Manual override via [data-theme="light"|"dark"] on <html> (set by lib/theme.js). */
 
 :root {
+  color-scheme: dark;
   --bg: #000000;
-  --card: #111111;
-  --card-2: #181818;
-  --border: rgba(255, 255, 255, 0.07);
+  --card: #0d0d0d;
+  --card-2: #151515;
+  --border: rgba(255, 255, 255, 0.06);
   --border-2: rgba(255, 255, 255, 0.14);
   --text: #ffffff;
-  --text-dim: #888888;
+  --text-dim: #9a9a9a;
   --text-dimmer: #555555;
+  --avatar-bg: #151515;
+  --primary-bg: #ffffff;
+  --primary-fg: #000000;
+  --accent: #4ade80; /* live-dot green, same across themes */
+  --danger: #ff6b6b;
+  --shadow-lift: 0 0 0 rgba(0, 0, 0, 0);
   --radius: 14px;
   --radius-sm: 10px;
   --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Auto-light when OS prefers light AND user hasn't overridden */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --bg: #ffffff;
+    --card: #fafafa;
+    --card-2: #f1f1f1;
+    --border: rgba(0, 0, 0, 0.07);
+    --border-2: rgba(0, 0, 0, 0.16);
+    --text: #0a0a0a;
+    --text-dim: #666666;
+    --text-dimmer: #a8a8a8;
+    --avatar-bg: #f0f0f0;
+    --primary-bg: #0a0a0a;
+    --primary-fg: #ffffff;
+  }
+}
+
+/* Manual overrides (win over prefers) */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #ffffff;
+  --card: #fafafa;
+  --card-2: #f1f1f1;
+  --border: rgba(0, 0, 0, 0.07);
+  --border-2: rgba(0, 0, 0, 0.16);
+  --text: #0a0a0a;
+  --text-dim: #666666;
+  --text-dimmer: #a8a8a8;
+  --avatar-bg: #f0f0f0;
+  --primary-bg: #0a0a0a;
+  --primary-fg: #ffffff;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #000000;
+  --card: #0d0d0d;
+  --card-2: #151515;
+  --border: rgba(255, 255, 255, 0.06);
+  --border-2: rgba(255, 255, 255, 0.14);
+  --text: #ffffff;
+  --text-dim: #9a9a9a;
+  --text-dimmer: #555555;
+  --avatar-bg: #151515;
+  --primary-bg: #ffffff;
+  --primary-fg: #000000;
 }
 
 * {
@@ -19,8 +77,7 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-html,
-body {
+html, body {
   margin: 0;
   padding: 0;
   height: 100%;
@@ -28,10 +85,11 @@ body {
   color: var(--text);
   font-family: var(--font);
   font-size: 15px;
-  line-height: 1.5;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overscroll-behavior: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 body {
@@ -53,81 +111,78 @@ button {
   appearance: none;
 }
 
-input,
-textarea {
+input, textarea {
   font-family: inherit;
   -webkit-appearance: none;
   appearance: none;
 }
 
-/* ---------- Landing ---------- */
+/* ========== Landing ========== */
 
 .landing {
   flex: 1;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 40px 24px;
+  padding: 44px 24px 28px;
   max-width: 520px;
   margin: 0 auto;
   width: 100%;
 }
 
 .landing-hero {
-  padding-top: 60px;
+  padding-top: 48px;
 }
 
 .wordmark {
-  font-size: 64px;
+  font-size: 56px;
   font-weight: 900;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.035em;
   line-height: 1;
-  margin: 0 0 32px;
+  margin: 0 0 28px;
 }
 
 .tagline {
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 700;
-  letter-spacing: -0.025em;
-  line-height: 1.15;
-  margin: 0 0 24px;
-  color: var(--text);
+  letter-spacing: -0.022em;
+  line-height: 1.18;
+  margin: 0 0 20px;
 }
 
 .lede {
-  font-size: 16px;
+  font-size: 15px;
   color: var(--text-dim);
-  margin: 0 0 48px;
+  margin: 0 0 44px;
   max-width: 420px;
 }
 
 .landing-actions {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 56px;
+  height: 52px;
   border-radius: var(--radius);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
-  letter-spacing: -0.01em;
-  transition: background 0.15s ease, border-color 0.15s ease;
-  padding: 0 24px;
+  letter-spacing: -0.005em;
+  padding: 0 22px;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
 }
 
 .btn-primary {
-  background: #ffffff;
-  color: #000000;
-  border: 1px solid #ffffff;
+  background: var(--primary-bg);
+  color: var(--primary-fg);
+  border: 1px solid var(--primary-bg);
 }
-
 .btn-primary:active {
-  background: #dddddd;
+  opacity: 0.85;
 }
 
 .btn-secondary {
@@ -135,7 +190,6 @@ textarea {
   color: var(--text);
   border: 1px solid var(--border);
 }
-
 .btn-secondary:active {
   background: var(--card-2);
   border-color: var(--border-2);
@@ -145,19 +199,18 @@ textarea {
   background: transparent;
   color: var(--text-dim);
   border: 1px solid transparent;
-  height: 48px;
+  height: 46px;
   font-size: 14px;
   font-weight: 500;
 }
-
 .btn-ghost:active {
   color: var(--text);
   background: var(--card);
 }
 
 .btn-danger {
-  color: #ff6b6b !important;
-  border-color: rgba(255, 107, 107, 0.25) !important;
+  color: var(--danger) !important;
+  border-color: color-mix(in srgb, var(--danger) 25%, transparent) !important;
 }
 
 .btn:disabled {
@@ -168,40 +221,52 @@ textarea {
 .landing-footer {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   color: var(--text-dimmer);
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 500;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   margin-top: 40px;
 }
-
-.landing-footer a {
+.landing-footer a,
+.landing-footer button {
   color: inherit;
   text-decoration: none;
+  font: inherit;
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+.landing-footer button:active {
+  background: var(--card);
+  color: var(--text);
 }
 
-/* ---------- Identity card (after FaceID create) ---------- */
+/* ========== Identity card ========== */
 
 .identity-card {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 32px 24px;
+  padding: 28px 22px;
   text-align: center;
-  margin-top: 32px;
+  margin-top: 24px;
 }
 
 .identity-avatar {
-  width: 96px;
-  height: 96px;
-  margin: 0 auto 20px;
+  width: 92px;
+  height: 92px;
+  margin: 0 auto 18px;
   border-radius: 50%;
   overflow: hidden;
-  background: var(--card-2);
+  background: var(--avatar-bg);
   border: 1px solid var(--border);
 }
-
 .identity-avatar svg {
   display: block;
   width: 100%;
@@ -209,20 +274,19 @@ textarea {
 }
 
 .identity-handle {
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 800;
   letter-spacing: -0.02em;
   margin: 0 0 4px;
-  font-family: 'Inter', monospace;
 }
 
 .identity-note {
   font-size: 13px;
   color: var(--text-dim);
-  margin: 0 0 24px;
+  margin: 0 0 22px;
 }
 
-/* ---------- Party room ---------- */
+/* ========== Party room ========== */
 
 .party {
   display: flex;
@@ -236,7 +300,7 @@ textarea {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px 16px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--border);
   background: var(--bg);
   position: sticky;
@@ -249,11 +313,10 @@ textarea {
   height: 36px;
   border-radius: 50%;
   overflow: hidden;
-  background: var(--card-2);
+  background: var(--avatar-bg);
   flex-shrink: 0;
   border: 1px solid var(--border);
 }
-
 .party-avatar svg {
   display: block;
   width: 100%;
@@ -288,16 +351,15 @@ textarea {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #4ade80;
+  background: var(--accent);
 }
-
 .status-dot.offline {
   background: var(--text-dimmer);
 }
 
 .party-header-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
 .icon-btn {
@@ -310,9 +372,8 @@ textarea {
   align-items: center;
   justify-content: center;
   color: var(--text);
-  font-size: 18px;
+  font-size: 17px;
 }
-
 .icon-btn:active {
   background: var(--card-2);
 }
@@ -320,12 +381,11 @@ textarea {
 .party-peers {
   display: flex;
   gap: 8px;
-  padding: 12px 16px;
+  padding: 12px 14px;
   overflow-x: auto;
   border-bottom: 1px solid var(--border);
   scrollbar-width: none;
 }
-
 .party-peers::-webkit-scrollbar {
   display: none;
 }
@@ -335,7 +395,7 @@ textarea {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 12px 6px 6px;
+  padding: 5px 12px 5px 5px;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -343,25 +403,21 @@ textarea {
   font-weight: 600;
   white-space: nowrap;
 }
-
 .peer-chip.is-host {
   border-color: var(--border-2);
 }
-
 .peer-chip .peer-avatar {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   overflow: hidden;
-  background: var(--card-2);
+  background: var(--avatar-bg);
 }
-
 .peer-chip .peer-avatar svg {
   display: block;
   width: 100%;
   height: 100%;
 }
-
 .peer-chip .host-tag {
   font-size: 10px;
   color: var(--text-dim);
@@ -388,15 +444,14 @@ textarea {
 }
 
 .message-avatar {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   overflow: hidden;
-  background: var(--card-2);
+  background: var(--avatar-bg);
   flex-shrink: 0;
   margin-top: 2px;
 }
-
 .message-avatar svg {
   display: block;
   width: 100%;
@@ -429,37 +484,39 @@ textarea {
 
 .message-text {
   font-size: 15px;
-  line-height: 1.4;
+  line-height: 1.42;
   color: var(--text);
   word-break: break-word;
   white-space: pre-wrap;
 }
 
-.message.system .message-text {
-  font-size: 13px;
-  color: var(--text-dim);
-  font-style: italic;
-}
+/* ========== Join notice (centered divider with avatar) ========== */
 
-/* Centered join announcement in the middle of the chat */
 .message-join {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 14px 0 10px;
-  animation: join-pop 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  justify-content: center;
+  gap: 10px;
+  margin: 4px 0;
+}
+
+.message-join::before,
+.message-join::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
 }
 
 .message-join-avatar {
-  width: 56px;
-  height: 56px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   overflow: hidden;
-  background: var(--card-2);
+  background: var(--avatar-bg);
+  flex-shrink: 0;
   border: 1px solid var(--border);
 }
-
 .message-join-avatar svg {
   display: block;
   width: 100%;
@@ -467,45 +524,38 @@ textarea {
 }
 
 .message-join-label {
-  font-size: 14px;
+  font-size: 12px;
   color: var(--text-dim);
-  text-align: center;
-  letter-spacing: 0.01em;
+  font-weight: 500;
+  white-space: nowrap;
 }
-
 .message-join-label strong {
   color: var(--text);
   font-weight: 700;
-  margin-right: 4px;
 }
 
-@keyframes join-pop {
-  0% { opacity: 0; transform: translateY(-6px) scale(0.88); }
-  60% { opacity: 1; transform: translateY(0) scale(1.03); }
-  100% { transform: scale(1); }
-}
+/* ========== System alert (e.g., "party's over") ========== */
 
-/* Centered alert pill (host left, offline, etc.) */
 .message-alert {
-  display: flex;
-  justify-content: center;
-  padding: 10px 0;
-}
-
-.message-alert-text {
-  font-size: 12px;
-  color: var(--text-dim);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  padding: 6px 14px;
+  margin: 4px auto;
+  padding: 8px 16px;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 999px;
 }
+.message-alert-text {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-weight: 500;
+  text-align: center;
+  font-style: italic;
+}
+
+/* ========== Composer ========== */
 
 .compose {
   border-top: 1px solid var(--border);
-  padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
   display: flex;
   gap: 8px;
   background: var(--bg);
@@ -523,12 +573,11 @@ textarea {
   color: var(--text);
   font-size: 16px;
   outline: none;
+  transition: border-color 0.12s ease;
 }
-
 .compose-input:focus {
   border-color: var(--border-2);
 }
-
 .compose-input::placeholder {
   color: var(--text-dimmer);
 }
@@ -537,15 +586,14 @@ textarea {
   height: 44px;
   width: 44px;
   border-radius: 22px;
-  background: #ffffff;
-  color: #000000;
-  font-size: 20px;
+  background: var(--primary-bg);
+  color: var(--primary-fg);
+  font-size: 19px;
   font-weight: 800;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-
 .compose-send:disabled {
   background: var(--card-2);
   color: var(--text-dimmer);
@@ -553,7 +601,7 @@ textarea {
   pointer-events: none;
 }
 
-/* ---------- Empty / error states ---------- */
+/* ========== Center states (needs identity, party's over landing, etc.) ========== */
 
 .center-state {
   flex: 1;
@@ -563,11 +611,11 @@ textarea {
   justify-content: center;
   text-align: center;
   padding: 40px 24px;
-  gap: 16px;
+  gap: 14px;
 }
 
 .state-title {
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 800;
   letter-spacing: -0.025em;
   margin: 0;
@@ -583,13 +631,13 @@ textarea {
 .state-actions {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
   max-width: 320px;
-  margin-top: 16px;
+  margin-top: 14px;
 }
 
-/* ---------- Toast ---------- */
+/* ========== Toast ========== */
 
 .toast {
   position: fixed;
@@ -606,27 +654,172 @@ textarea {
   z-index: 100;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.2s ease;
+  transition: opacity 0.18s ease;
+  max-width: calc(100% - 40px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-
 .toast.show {
   opacity: 1;
 }
 
-/* ---------- Loader ---------- */
+/* ========== Loader ========== */
 
 .loader {
   width: 18px;
   height: 18px;
-  border: 2px solid rgba(255, 255, 255, 0.15);
-  border-top-color: #ffffff;
+  border: 2px solid var(--border-2);
+  border-top-color: var(--text);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
   display: inline-block;
 }
 
 @keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  to { transform: rotate(360deg); }
+}
+
+/* ========== Rooms panel ========== */
+
+.rooms-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  max-width: 520px;
+  margin: 0 auto;
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.rooms-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 10;
+}
+
+.rooms-title {
+  flex: 1;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.022em;
+  margin: 0;
+  text-align: center;
+}
+
+.rooms-body {
+  flex: 1;
+  padding: 20px 14px 28px;
+}
+
+.rooms-section {
+  margin-bottom: 24px;
+}
+
+.rooms-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 0 8px 10px;
+}
+
+.room-list {
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.room-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--border);
+  color: var(--text);
+  width: 100%;
+  text-align: left;
+  min-height: 62px;
+  transition: background 0.1s ease;
+}
+.room-item:first-child {
+  border-top: none;
+}
+.room-item:active {
+  background: var(--card-2);
+}
+
+.room-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--avatar-bg);
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+}
+.room-avatar svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.room-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.room-name {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+.room-sub {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+.room-sub .live-badge {
+  color: var(--accent);
+}
+
+.room-chevron {
+  color: var(--text-dimmer);
+  font-size: 17px;
+  font-weight: 400;
+}
+
+.rooms-empty {
+  text-align: center;
+  padding: 48px 20px;
+  color: var(--text-dim);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.rooms-footer {
+  padding: 20px 14px 0;
+  display: flex;
+  justify-content: center;
+}
+.rooms-footer .btn-ghost {
+  height: 42px;
+  font-size: 13px;
 }

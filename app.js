@@ -1,4 +1,4 @@
-// Party — SPA entry, router, and view rendering.
+// Party — SPA entry, router, views.
 // All business logic lives in ./lib/*. This file only wires DOM → modules.
 
 import { esc, displayHandle, formatTime, toast } from './lib/util.js'
@@ -11,10 +11,13 @@ import {
   parseFragment,
   navigateToParty,
   navigateHome,
+  navigateToRooms,
   generateSessionId,
   buildPartyUrl,
   maintainHostFragment,
 } from './lib/url.js'
+import { RoomHistory, relativeTime } from './lib/rooms.js'
+import { Theme } from './lib/theme.js'
 
 const HOST_SEARCH_TIMEOUT_MS = 30000
 const AVATAR_PAD = '0'.repeat(32)
@@ -40,15 +43,15 @@ function renderLanding(identity) {
         <p class="lede">Face ID gets you a unique name. Your name is your party. Post the link anywhere. Your fans come over. When you close Safari, the party's over.</p>
         ${identity ? identityCard(identity) : createCta()}
       </div>
-      <div class="landing-footer">
-        <span>Labs · 2026</span>
-        <span>Safari · iPhone</span>
-      </div>
+      ${renderFooter()}
     </div>
   `
 
+  wireFooter()
+
   if (identity) {
     document.getElementById('open-party').onclick = () => navigateToParty(identity.handle)
+    document.getElementById('rooms-btn').onclick = navigateToRooms
     document.getElementById('copy-link').onclick = () => copyInviteLink(identity)
     wireClearData()
   } else {
@@ -64,6 +67,7 @@ function identityCard(identity) {
       <p class="identity-note">Your name. Your party.</p>
       <div class="landing-actions">
         <button class="btn btn-primary" id="open-party">Open my party</button>
+        <button class="btn btn-secondary" id="rooms-btn">Rooms</button>
         <button class="btn btn-secondary" id="copy-link">Copy my link</button>
         <button class="btn btn-ghost" id="clear-data">Clear my data</button>
       </div>
@@ -79,7 +83,25 @@ function createCta() {
   `
 }
 
-// Copy link from landing: always includes full connection info (session + avatar + timestamp)
+function renderFooter() {
+  return `
+    <div class="landing-footer">
+      <span>Labs · 2026</span>
+      <button id="theme-toggle">Theme · ${Theme.label()}</button>
+      <span>Safari · iPhone</span>
+    </div>
+  `
+}
+
+function wireFooter() {
+  const btn = document.getElementById('theme-toggle')
+  if (!btn) return
+  btn.onclick = () => {
+    const mode = Theme.cycle()
+    btn.textContent = `Theme · ${Theme.label(mode)}`
+  }
+}
+
 async function copyInviteLink(identity) {
   const url = buildPartyUrl(identity.handle, {
     sessionId: generateSessionId(),
@@ -113,6 +135,7 @@ function wireClearData() {
     clearTimeout(armTimer)
     armed = false
     Identity.clear()
+    RoomHistory.clear()
     try { await Store.clearAll() } catch {}
     toast('Data cleared. Create a new party.')
     render()
@@ -132,6 +155,132 @@ async function handleCreate() {
     btn.textContent = 'Create my party'
     toast(err.message || 'Face ID failed')
   }
+}
+
+// ==================== ROOMS PANEL ====================
+
+function renderRooms(identity) {
+  const rooms = RoomHistory.list()
+  const otherRooms = identity ? rooms.filter(r => r.handle !== identity.handle) : rooms
+
+  app.innerHTML = `
+    <div class="rooms-view">
+      <div class="rooms-header">
+        <button class="icon-btn" id="rooms-back" aria-label="Back">←</button>
+        <h1 class="rooms-title">Rooms</h1>
+        <div style="width:36px;"></div>
+      </div>
+      <div class="rooms-body">
+        ${identity ? renderMyPartySection(identity) : ''}
+        ${otherRooms.length ? renderRecentSection(otherRooms) : (identity ? '' : emptyPrompt())}
+        ${identity && !otherRooms.length ? emptyRecent() : ''}
+        ${otherRooms.length ? `
+          <div class="rooms-footer">
+            <button class="btn btn-ghost" id="rooms-clear">Clear history</button>
+          </div>
+        ` : ''}
+      </div>
+    </div>
+  `
+
+  document.getElementById('rooms-back').onclick = () => {
+    if (window.history.length > 1) window.history.back()
+    else navigateHome()
+  }
+
+  for (const el of document.querySelectorAll('[data-room-handle]')) {
+    const h = el.getAttribute('data-room-handle')
+    el.onclick = () => navigateToParty(h)
+  }
+
+  const clearBtn = document.getElementById('rooms-clear')
+  if (clearBtn) {
+    let armed = false
+    let armTimer = null
+    clearBtn.onclick = () => {
+      if (!armed) {
+        armed = true
+        clearBtn.textContent = 'Tap again to clear history'
+        clearBtn.classList.add('btn-danger')
+        armTimer = setTimeout(() => {
+          armed = false
+          clearBtn.textContent = 'Clear history'
+          clearBtn.classList.remove('btn-danger')
+        }, 4000)
+        return
+      }
+      clearTimeout(armTimer)
+      RoomHistory.clear()
+      toast('Rooms history cleared')
+      render()
+    }
+  }
+}
+
+function renderMyPartySection(identity) {
+  return `
+    <div class="rooms-section">
+      <div class="rooms-section-label">Your party</div>
+      <div class="room-list">
+        <button class="room-item" data-room-handle="${esc(identity.handle)}">
+          <div class="room-avatar">${avatarSvg(identity.avatarSeed)}</div>
+          <div class="room-meta">
+            <div class="room-name">${esc(displayHandle(identity.handle))}</div>
+            <div class="room-sub">Tap to host</div>
+          </div>
+          <span class="room-chevron">›</span>
+        </button>
+      </div>
+    </div>
+  `
+}
+
+function renderRecentSection(rooms) {
+  return `
+    <div class="rooms-section">
+      <div class="rooms-section-label">Recent</div>
+      <div class="room-list">
+        ${rooms.map(renderRoomItem).join('')}
+      </div>
+    </div>
+  `
+}
+
+function renderRoomItem(r) {
+  const avatar = avatarSvg(padSeed(r.avatarSeed))
+  const when = r.lastVisit ? relativeTime(r.lastVisit) : ''
+  const liveHint = r.lastSeenLive && Date.now() - r.lastSeenLive < 5 * 60 * 1000
+    ? `<span class="live-badge">● live recently</span> · `
+    : ''
+  return `
+    <button class="room-item" data-room-handle="${esc(r.handle)}">
+      <div class="room-avatar">${avatar}</div>
+      <div class="room-meta">
+        <div class="room-name">${esc(displayHandle(r.handle))}</div>
+        <div class="room-sub">${liveHint}${esc(when)}</div>
+      </div>
+      <span class="room-chevron">›</span>
+    </button>
+  `
+}
+
+function emptyRecent() {
+  return `
+    <div class="rooms-section">
+      <div class="rooms-section-label">Recent</div>
+      <div class="rooms-empty">
+        No other rooms yet.<br>Open a shared link to add it here.
+      </div>
+    </div>
+  `
+}
+
+function emptyPrompt() {
+  return `
+    <div class="rooms-empty">
+      Create your party first to see rooms here.
+    </div>
+  `
 }
 
 // ==================== NEEDS IDENTITY ====================
@@ -177,14 +326,16 @@ function renderParty(roomHandle, me, fragData) {
 
   const amHost = roomHandle === me.handle
 
-  // Session accelerator: host generates; guest reads from URL fragment.
   const sessionId = fragData.sessionId || (amHost ? generateSessionId() : null)
 
-  // Host avatar preview: known immediately if we're the host, or from the
-  // URL fragment if we're a guest. Rendered before any network traffic.
+  // Record visit to rooms history (with any avatar/session info we already know)
+  RoomHistory.record(roomHandle, {
+    avatarSeed: amHost ? me.avatarSeed.slice(0, 16) : fragData.avatarSeed,
+    sessionId,
+  })
+
   const initialHostAvatar = amHost ? me.avatarSeed : padSeed(fragData.avatarSeed)
 
-  // If host, keep URL fragment up to date with full connection string
   if (amHost) {
     stopFragmentMaintenance = maintainHostFragment(sessionId, me.avatarSeed)
   }
@@ -215,6 +366,7 @@ function renderParty(roomHandle, me, fragData) {
   renderRoomAvatar(initialHostAvatar)
 
   document.getElementById('share-btn').onclick = () => handleShare(roomHandle, me, sessionId, amHost)
+  document.getElementById('rooms-btn').onclick = navigateToRooms
   document.getElementById('home-btn').onclick = navigateHome
 
   const updateStatus = () => {
@@ -271,14 +423,12 @@ function renderParty(roomHandle, me, fragData) {
     if (e.key === 'Enter') { e.preventDefault(); doSend() }
   }
 
-  // Load cached history
   Store.prune().catch(() => {})
   Store.getMessages(roomHandle).then(history => {
     for (const m of history) state.messages.push(m)
     renderMessages()
   }).catch(console.error)
 
-  // Start the mesh
   const mesh = new Mesh(roomHandle, me, sessionId)
   activeMesh = mesh
 
@@ -289,6 +439,12 @@ function renderParty(roomHandle, me, fragData) {
     if (host) {
       state.hostPresent = true
       renderRoomAvatar(host.avatarSeed)
+      // Update history with freshly-seen host avatar & live timestamp
+      RoomHistory.record(roomHandle, {
+        avatarSeed: host.avatarSeed ? host.avatarSeed.slice(0, 16) : null,
+        sessionId,
+      })
+      RoomHistory.markLive(roomHandle)
     }
     renderPeers()
     updateStatus()
@@ -323,7 +479,6 @@ function renderParty(roomHandle, me, fragData) {
   renderPeers()
   updateStatus()
 
-  // Guest-only: if we never find the host within the search window, close out
   setTimeout(() => {
     if (!amHost && !state.hostPresent && !state.partyOver) {
       state.partyOver = true
@@ -339,8 +494,6 @@ function renderParty(roomHandle, me, fragData) {
   }, HOST_SEARCH_TIMEOUT_MS)
 }
 
-// --- party template fragments ---
-
 function partyShell(roomHandle, amHost) {
   const placeholder = amHost ? 'Say something to your party…' : 'Say hi…'
   return `
@@ -355,8 +508,9 @@ function partyShell(roomHandle, amHost) {
           </p>
         </div>
         <div class="party-header-actions">
-          <button class="icon-btn" id="share-btn" title="Share">↗</button>
-          <button class="icon-btn" id="home-btn" title="Home">×</button>
+          <button class="icon-btn" id="rooms-btn" title="Rooms" aria-label="Rooms">≡</button>
+          <button class="icon-btn" id="share-btn" title="Share" aria-label="Share">↗</button>
+          <button class="icon-btn" id="home-btn" title="Home" aria-label="Home">×</button>
         </div>
       </div>
       <div class="party-peers" id="peers"></div>
@@ -406,8 +560,6 @@ function renderMessage(m) {
   `
 }
 
-// Host shares URL with full connection string; guest shares the current URL
-// (which already contains whatever the host published)
 async function handleShare(roomHandle, me, sessionId, amHost) {
   const url = amHost
     ? buildPartyUrl(roomHandle, {
@@ -448,20 +600,28 @@ function cleanupActiveSession() {
 }
 
 function render() {
-  const { handle: roomHandle } = parseRoute()
+  const { handle: roomHandle, view } = parseRoute()
   const fragData = parseFragment()
   const identity = Identity.load()
+
+  if (view === 'rooms') {
+    cleanupActiveSession()
+    renderRooms(identity)
+    return
+  }
 
   if (!roomHandle) {
     cleanupActiveSession()
     renderLanding(identity)
     return
   }
+
   if (!identity) {
     cleanupActiveSession()
     renderNeedsIdentity(roomHandle, fragData)
     return
   }
+
   renderParty(roomHandle, identity, fragData)
 }
 
@@ -471,6 +631,7 @@ window.addEventListener('pagehide', cleanupActiveSession)
 // ==================== BOOT ====================
 
 async function boot() {
+  Theme.apply()
   Store.open().catch(console.error)
   await Identity.migrate()
   render()
