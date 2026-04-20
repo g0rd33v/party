@@ -266,11 +266,7 @@ input, textarea {
   overflow: hidden;
   background: var(--avatar-bg);
   border: 1px solid var(--border);
-}
-.identity-avatar svg {
-  display: block;
-  width: 100%;
-  height: 100%;
+  font-size: 58px;
 }
 
 .identity-handle {
@@ -316,11 +312,7 @@ input, textarea {
   background: var(--avatar-bg);
   flex-shrink: 0;
   border: 1px solid var(--border);
-}
-.party-avatar svg {
-  display: block;
-  width: 100%;
-  height: 100%;
+  font-size: 22px;
 }
 
 .party-title {
@@ -412,11 +404,7 @@ input, textarea {
   border-radius: 50%;
   overflow: hidden;
   background: var(--avatar-bg);
-}
-.peer-chip .peer-avatar svg {
-  display: block;
-  width: 100%;
-  height: 100%;
+  font-size: 15px;
 }
 .peer-chip .host-tag {
   font-size: 10px;
@@ -451,11 +439,7 @@ input, textarea {
   background: var(--avatar-bg);
   flex-shrink: 0;
   margin-top: 2px;
-}
-.message-avatar svg {
-  display: block;
-  width: 100%;
-  height: 100%;
+  font-size: 18px;
 }
 
 .message-body {
@@ -516,11 +500,7 @@ input, textarea {
   background: var(--avatar-bg);
   flex-shrink: 0;
   border: 1px solid var(--border);
-}
-.message-join-avatar svg {
-  display: block;
-  width: 100%;
-  height: 100%;
+  font-size: 14px;
 }
 
 .message-join-label {
@@ -664,6 +644,24 @@ input, textarea {
   opacity: 1;
 }
 
+/* ========== Emoji avatars ==========
+   The avatar renderer returns <div class="emoji-avatar">…</div>. Each avatar
+   container sets its own width/height and font-size; .emoji-avatar fills the
+   container and inherits the font-size. */
+
+.emoji-avatar {
+  width: 100%;
+  height: 100%;
+  background: var(--avatar-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'Twemoji Mozilla', system-ui, sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 /* ========== Loader ========== */
 
 .loader {
@@ -770,11 +768,7 @@ input, textarea {
   background: var(--avatar-bg);
   flex-shrink: 0;
   border: 1px solid var(--border);
-}
-.room-avatar svg {
-  display: block;
-  width: 100%;
-  height: 100%;
+  font-size: 24px;
 }
 
 .room-meta {
