@@ -10,11 +10,51 @@ Peer-to-peer ephemeral chat. Every iPhone is a node. Every party is a link. No a
 
 Party runs entirely inside Safari on iPhone. Static files only. No backend.
 
-- **Face ID gives you a name.** Deterministic 6-letter handle derived from your passkey. Same device = same name forever. No email, no password, no recovery.
-- **Your name is your party.** `g0rd33v.github.io/party/ktrmqx` is your room. Post the link anywhere.
+- **Face ID gives you a name.** Deterministic 3-word handle ("Big Red Apple") derived from your passkey. Same device = same name forever. No email, no password, no recovery.
+- **Your name is your party.** `g0rd33v.github.io/party/big-red-apple` is your room.
+- **Copy the URL, share the URL.** The URL fragment contains everything needed to connect — session ID, your avatar, freshness timestamp. Anyone who copies your URL at any moment gets the current connection string.
 - **Open Safari = party on.** Close the tab = party's over. Presence equals the foreground.
 - **Peers chat directly.** WebRTC mesh between browsers. No relay, no server, no middleman.
 - **24h local history.** Messages live in your IndexedDB. Rolling window. Nothing on our side.
+
+---
+
+## Architecture
+
+```
+party/
+├── index.html          # SPA entry
+├── 404.html            # SPA fallback for /party/<handle> deep links
+├── .nojekyll           # tell GitHub Pages to skip Jekyll
+├── style.css           # Atom.me dark system
+├── app.js              # SPA entry + router + views (the DOM layer)
+└── lib/
+    ├── util.js         # Helpers: sha256, base64url, esc, displayHandle, toast
+    ├── avatar.js       # Pixel emoji face renderer (6^6 = 46,656 deterministic faces)
+    ├── identity.js     # WebAuthn Face ID + 3-word handle derivation + migration
+    ├── storage.js      # IndexedDB wrapper, 24h rolling retention
+    ├── mesh.js         # Trystero multi-room WebRTC mesh
+    └── url.js          # URL path/fragment parsing + live connection-string writer
+```
+
+Every file has a single responsibility. `app.js` only wires DOM events to module calls. Business logic lives in `lib/`.
+
+---
+
+## URL format
+
+```
+Path:     /party/<handle>              ← identity (always works)
+Fragment: #s=SID&a=AVATAR&t=TIMESTAMP  ← live connection info
+```
+
+| Field | Purpose |
+|---|---|
+| `s` | Session accelerator room ID — a small extra Trystero room for fast WebRTC pairing |
+| `a` | Host avatar seed (first 16 hex chars) — guests render the host's face instantly, before any network traffic |
+| `t` | Timestamp when the fragment was written — freshness signal |
+
+Hosts continuously maintain this fragment while their party is live. Any copy of the URL at any moment contains up-to-date connection info. No separate "Share" click needed — select the URL bar, copy, paste anywhere.
 
 ---
 
@@ -24,113 +64,86 @@ Party runs entirely inside Safari on iPhone. Static files only. No backend.
 |---|---|
 | Platform | Safari on iPhone |
 | Hosting | GitHub Pages (static) |
-| Identity | WebAuthn passkey + Face ID |
-| Handle | 6 lowercase letters, derived from credential |
-| Avatar | Deterministic 5×5 SVG identicon, derived from credential |
+| Identity | WebAuthn passkey + Face ID, synced via iCloud Keychain |
+| Handle | 3 words (size-color-noun), ~1M combinations |
+| Avatar | Pixel emoji face, 46,656 combinations from passkey hash |
 | Transport | WebRTC via Trystero (public BitTorrent WSS trackers for signaling) |
 | Storage | IndexedDB, 24h rolling |
 | Content | Text + emoji only |
 | Rooms | Unlimited peers (gossip mesh), dies when host closes tab |
-| Auth per session | None — Face ID on first credential creation only |
-| Moderation | None in MVP — each room is the host's sandbox |
 
 ---
 
 ## Deploy
 
-This is a static SPA. No build step.
+Static SPA. No build step.
 
 ```bash
-# In this repo, on main branch
 git add .
-git commit -m "init party mvp"
+git commit -m "update"
 git push origin main
 ```
 
-Then in GitHub repo settings: **Pages → Source: `main` branch / root (`/`)**.
-
-Site will be live at `https://<user>.github.io/party/` within ~60 seconds.
-
----
-
-## File structure
-
-```
-party/
-├── index.html      # SPA entry
-├── 404.html        # SPA fallback so /party/<handle> URLs work
-├── app.js          # All logic: routing, Face ID, mesh, storage, UI
-├── style.css       # Atom.me dark system
-├── .nojekyll       # Tell GitHub Pages to skip Jekyll
-└── README.md
-```
+Then in repo settings: **Pages → Source: `main` / `/ (root)`**. Live at `https://<user>.github.io/party/` in ~60 seconds.
 
 ---
 
 ## How it works
 
 ### Create your party
-
 1. Open `/party/` on iPhone Safari
-2. Tap **Create my party**
-3. Face ID prompts — scan face
-4. Passkey is created locally (never leaves your device)
-5. We hash the passkey → derive 6-letter handle + avatar
-6. Your party is now at `/party/<handle>`
+2. Tap **Create my party** → Face ID
+3. Passkey created, handle derived, pixel face rendered
+4. You land on `/party/<your-handle>`
 
 ### Host a party
-
-1. Open `/party/<your-handle>`
-2. You're the host
-3. While the tab stays foreground, the party is live
-4. Share the URL on Twitter / Telegram / TikTok bio / anywhere
-5. Anyone who clicks it while you're live joins the party
-6. Close Safari → party's over
+1. Open `/party/<your-handle>` — you're the host
+2. Your URL bar now contains full connection info (session + avatar + freshness)
+3. Copy the URL from anywhere (bar, **Share** button, **Copy my link** on landing)
+4. Share it on Twitter / Telegram / TikTok bio
+5. Anyone who clicks it while you're live lands in your party
+6. Close Safari = party's over
 
 ### Join a party
-
 1. Tap a Party link
-2. If you don't have a passkey yet → Face ID creates one, then you're in
-3. If you do → you enter immediately
-4. You see the host's avatar, live peers, chat stream
+2. Guest's browser extracts the fragment → renders host avatar immediately
+3. Joins main room + session accelerator room → fast WebRTC handshake
+4. If you don't have a passkey yet → Face ID creates one, then you're in
 5. You can talk until the host closes their tab
 
 ---
 
 ## Technical notes
 
-### WebRTC signaling
+### Why two Trystero rooms
 
-Party uses [Trystero](https://github.com/dmotz/trystero) with the BitTorrent WSS tracker strategy. Trackers are public community infrastructure, same as used by WebTorrent. No backend of ours.
+Main room (`big-red-apple`) matches everyone in the party. On a crowded tracker it can take 10–30 seconds to pair initially.
 
-The room ID on the tracker is the host handle. When the host's tab goes live, they announce. When a peer clicks the link, they discover the host through the same tracker, and WebRTC takes over. After the first connection, peer gossip handles everything else.
+The session accelerator room (`s-<sessionId>`) typically has just the host and one invitee. Tracker pairing there is near-instant. Once paired via either room, messages broadcast through all joined rooms with receive-side dedup.
+
+Net effect: first handshake lands fast; the full mesh fills in behind it.
 
 ### Host death
 
-When the host closes Safari or backgrounds the tab long enough for iOS to kill the WebRTC session, other peers see `onPeerLeave` for the host's peer ID. The room immediately shows "Party's over" and input is disabled. Guests can't see each other's messages anymore — by design.
-
-### Why not a real gossip relay?
-
-MVP uses Trystero's default full mesh. Every peer connects to every peer. This works well up to ~20–50 peers. Beyond that, a phone's WebRTC stack starts struggling. True gossip relay (messages hop through neighbors, not direct to host) is v1.1 engineering.
+When the host closes Safari, their peer leaves all rooms. A 5-second grace timer handles brief reconnects. If the host doesn't return, guests see "Party's over" and input is disabled. Rooms are ephemeral by design.
 
 ### Handle collisions
 
-6 lowercase letters = 26⁶ = ~309M combinations. At 10K daily users, collision probability per day is ~0.016%. Handles are not enforced globally unique — they're deterministic per device. Two users *could* get the same handle by coincidence; their parties would collide. If this matters in v2, bump to 8 chars (≈208B combinations, essentially collision-free).
+3-word handles, ~1M combinations. Collision probability at 1K daily users ≈ 0.05%. Handles are not globally enforced; they're deterministic per device. If two users coincidentally derive the same handle, their parties collide at the same URL. If this matters in the future, bump to 4-word handles (~66M combinations).
 
-### Safari foreground only
+### Why foreground-only
 
-iOS Safari kills WebRTC connections within seconds of backgrounding. This is why Party only works while the tab is foreground. It's the feature, not the bug: presence equals attention.
+iOS Safari kills WebRTC connections within seconds of backgrounding. This is why presence equals the foreground tab. It's the feature, not the bug: a party is something happening *right now*.
 
 ---
 
-## Roadmap (post-MVP)
+## Roadmap
 
-- Room customization (rules, design, widgets) — each Safari is its own sandbox
-- Promoted Nodes leaderboard (enthusiasts compete on uptime)
-- Friend list (saved handles to ping on boot)
-- True gossip relay for rooms >50 peers
+- True gossip relay for rooms with 50+ peers (current mesh handles up to ~30 reliably)
+- Room customization (each Safari as its own rule-set / design / widgets)
+- Promoted Nodes leaderboard (high-uptime chats compete to be entry points)
+- Friend list synced to passkey for cross-device "homes"
 - Images / media
-- Browser support beyond Safari iOS
 
 ---
 
