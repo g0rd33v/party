@@ -403,6 +403,17 @@ const Store = {
       req.onerror = () => reject(req.error)
     })
   },
+
+  async clearAll() {
+    const db = await this.open()
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(DB_STORE_MESSAGES, 'readwrite')
+      const store = tx.objectStore(DB_STORE_MESSAGES)
+      const req = store.clear()
+      req.onsuccess = () => resolve()
+      req.onerror = () => reject(req.error)
+    })
+  },
 }
 
 // ---------- Mesh (Trystero) ----------
@@ -570,6 +581,7 @@ function renderLanding(identity) {
             <div class="landing-actions">
               <button class="btn btn-primary" id="open-party">Open my party</button>
               <button class="btn btn-secondary" id="copy-link">Copy my link</button>
+              <button class="btn btn-ghost" id="clear-data">Clear my data</button>
             </div>
           </div>
         ` : `
@@ -595,6 +607,28 @@ function renderLanding(identity) {
       } catch {
         toast(url)
       }
+    }
+    const clearBtn = document.getElementById('clear-data')
+    let clearArmed = false
+    let clearTimer = null
+    clearBtn.onclick = async () => {
+      if (!clearArmed) {
+        clearArmed = true
+        clearBtn.textContent = 'Tap again to confirm'
+        clearBtn.classList.add('btn-danger')
+        clearTimer = setTimeout(() => {
+          clearArmed = false
+          clearBtn.textContent = 'Clear my data'
+          clearBtn.classList.remove('btn-danger')
+        }, 4000)
+        return
+      }
+      clearTimeout(clearTimer)
+      clearArmed = false
+      Identity.clear()
+      try { await Store.clearAll() } catch {}
+      toast('Data cleared. Create a new party.')
+      render()
     }
   } else {
     document.getElementById('create').onclick = async () => {

@@ -141,6 +141,25 @@ textarea {
   border-color: var(--border-2);
 }
 
+.btn-ghost {
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px solid transparent;
+  height: 48px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.btn-ghost:active {
+  color: var(--text);
+  background: var(--card);
+}
+
+.btn-danger {
+  color: #ff6b6b !important;
+  border-color: rgba(255, 107, 107, 0.25) !important;
+}
+
 .btn:disabled {
   opacity: 0.4;
   pointer-events: none;
