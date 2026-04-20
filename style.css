@@ -639,19 +639,27 @@ input, textarea {
   opacity: 1;
 }
 
-/* ========== Avatar sizing ==========
-   The avatar renderer returns an inline SVG. Each avatar container sets its own
-   width/height; this rule makes the SVG fill it regardless of viewBox. */
+/* ========== Avatar (Twemoji image) ==========
+   The avatar renderer returns <div class="emoji-avatar"><img ...></div>.
+   Each avatar container sets its own width/height; the emoji-avatar fills
+   the container and centers the image with a bit of breathing room. */
 
-.identity-avatar > svg,
-.party-avatar > svg,
-.peer-avatar > svg,
-.message-avatar > svg,
-.message-join-avatar > svg,
-.room-avatar > svg {
-  display: block;
+.emoji-avatar {
   width: 100%;
   height: 100%;
+  background: var(--avatar-bg);
+  display: grid;
+  place-items: center;
+}
+
+.emoji-avatar img {
+  width: 72%;
+  height: 72%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
 }
 
 /* ========== Loader ========== */
