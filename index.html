@@ -33,6 +33,14 @@
 </head>
 <body>
   <div id="app"></div>
-  <script type="module" src="./app.js"></script>
+  <script type="module">
+    // Cache-bust the app entry so even the first reload after deploy gets
+    // fresh JS, before the service worker has a chance to install. The
+    // ?v=<timestamp> query threads through every dynamic import in the module
+    // graph (see app.js top), so the whole codebase is re-fetched on reload.
+    import(`./app.js?v=${Date.now()}`).catch(err => {
+      document.body.innerHTML = `<pre style="padding:20px;font:14px monospace;color:#f66">App load failed: ${err.message}</pre>`
+    })
+  </script>
 </body>
 </html>

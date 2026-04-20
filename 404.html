@@ -28,6 +28,13 @@
 </head>
 <body>
   <div id="app"></div>
-  <script type="module" src="/party/app.js"></script>
+  <script type="module">
+    // Cache-bust the app entry (matches index.html). 404.html is the SPA
+    // fallback for every deep-linked /party/<handle> URL on GitHub Pages, so
+    // this is the entry point for the majority of shared links.
+    import(`/party/app.js?v=${Date.now()}`).catch(err => {
+      document.body.innerHTML = `<pre style="padding:20px;font:14px monospace;color:#f66">App load failed: ${err.message}</pre>`
+    })
+  </script>
 </body>
 </html>

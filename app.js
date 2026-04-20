@@ -1,27 +1,42 @@
 // Party — SPA entry, router, views.
 // All business logic lives in ./lib/*. This file only wires DOM → modules.
+//
+// Cache-busting: the entry script in index.html imports us as
+// `./app.js?v=<timestamp>`. We inherit that query via import.meta.url.search
+// and append it to every lib import below, so the whole module graph re-fetches
+// on reload. Belt-and-suspenders with the network-first service worker —
+// works even on the very first load after deploy, before the SW has installed.
 
-import { esc, displayHandle, formatTime, toast } from './lib/util.js'
-import { avatarSvg } from './lib/avatar.js'
-import {
-  Identity,
-  generateBotChallenge,
-  verifyBotChallenge,
-} from './lib/identity.js'
-import { Store } from './lib/storage.js'
-import { Mesh } from './lib/mesh.js'
-import {
-  parseRoute,
-  parseFragment,
-  navigateToParty,
-  navigateHome,
-  navigateToRooms,
-  generateSessionId,
-  buildPartyUrl,
-  maintainHostFragment,
-} from './lib/url.js'
-import { RoomHistory, relativeTime } from './lib/rooms.js'
-import { Theme } from './lib/theme.js'
+const V = new URL(import.meta.url).search
+
+const [
+  { esc, displayHandle, formatTime, toast },
+  { avatarSvg },
+  { Identity, generateBotChallenge, verifyBotChallenge },
+  { Store },
+  { Mesh },
+  {
+    parseRoute,
+    parseFragment,
+    navigateToParty,
+    navigateHome,
+    navigateToRooms,
+    generateSessionId,
+    buildPartyUrl,
+    maintainHostFragment,
+  },
+  { RoomHistory, relativeTime },
+  { Theme },
+] = await Promise.all([
+  import(`./lib/util.js${V}`),
+  import(`./lib/avatar.js${V}`),
+  import(`./lib/identity.js${V}`),
+  import(`./lib/storage.js${V}`),
+  import(`./lib/mesh.js${V}`),
+  import(`./lib/url.js${V}`),
+  import(`./lib/rooms.js${V}`),
+  import(`./lib/theme.js${V}`),
+])
 
 const HOST_SEARCH_TIMEOUT_MS = 60000
 const AVATAR_PAD = '0'.repeat(32)
