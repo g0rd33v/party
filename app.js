@@ -3,7 +3,12 @@
 
 import { esc, displayHandle, formatTime, toast } from './lib/util.js'
 import { avatarSvg } from './lib/avatar.js'
-import { Identity } from './lib/identity.js'
+import {
+  Identity,
+  isBot,
+  generateBotChallenge,
+  verifyBotChallenge,
+} from './lib/identity.js'
 import { Store } from './lib/storage.js'
 import { Mesh } from './lib/mesh.js'
 import {
@@ -40,7 +45,7 @@ function renderLanding(identity) {
       <div class="landing-hero">
         <h1 class="wordmark">Party.</h1>
         <p class="tagline">A party is a link.<br/>Open Safari.<br/>Invite the world.</p>
-        <p class="lede">Face ID gets you a unique name. Your name is your party. Post the link anywhere. Your fans come over. When you close Safari, the party's over.</p>
+        <p class="lede">Host as a human — Face ID gets you a unique name. Or host as an agent — bots welcome, humans awkward.</p>
         ${identity ? identityCard(identity) : createCta()}
       </div>
       ${renderFooter()}
@@ -53,22 +58,26 @@ function renderLanding(identity) {
     document.getElementById('open-party').onclick = () => navigateToParty(identity.handle)
     document.getElementById('rooms-btn').onclick = navigateToRooms
     document.getElementById('copy-link').onclick = () => copyInviteLink(identity)
+    if (identity.isAgent) wireRevealAgentKey()
     wireClearData()
   } else {
     document.getElementById('create').onclick = handleCreate
+    document.getElementById('create-agent').onclick = renderAgentSetup
   }
 }
 
 function identityCard(identity) {
+  const note = identity.isAgent ? 'Your bot. Your party.' : 'Your name. Your party.'
   return `
-    <div class="identity-card">
-      <div class="identity-avatar">${avatarSvg(identity.avatarSeed)}</div>
+    <div class="identity-card ${identity.isAgent ? 'is-bot' : ''}">
+      <div class="identity-avatar">${avatarSvg(identity.avatarSeed, identity.handle)}</div>
       <h2 class="identity-handle">${displayHandle(identity.handle)}</h2>
-      <p class="identity-note">Your name. Your party.</p>
+      <p class="identity-note">${note}</p>
       <div class="landing-actions">
         <button class="btn btn-primary" id="open-party">Open my party</button>
         <button class="btn btn-secondary" id="rooms-btn">Rooms</button>
         <button class="btn btn-secondary" id="copy-link">Copy my link</button>
+        ${identity.isAgent ? '<button class="btn btn-ghost" id="reveal-key">Back up agent key</button>' : ''}
         <button class="btn btn-ghost" id="clear-data">Clear my data</button>
       </div>
     </div>
@@ -78,7 +87,8 @@ function identityCard(identity) {
 function createCta() {
   return `
     <div class="landing-actions">
-      <button class="btn btn-primary" id="create">Create my party</button>
+      <button class="btn btn-primary" id="create">Start party</button>
+      <button class="btn btn-secondary" id="create-agent">Host as agent</button>
     </div>
   `
 }
@@ -152,8 +162,122 @@ async function handleCreate() {
   } catch (err) {
     console.error(err)
     btn.disabled = false
-    btn.textContent = 'Create my party'
+    btn.textContent = 'Start party'
     toast(err.message || 'Face ID failed')
+  }
+}
+
+// ==================== AGENT SETUP (reverse-CAPTCHA) ====================
+//
+// Agents don't have Face ID. They prove they're agents by computing a SHA-256
+// hash. Any code-executing entity passes in milliseconds; a human manually on
+// a phone cannot. On success we mint a 32-byte random secret and derive the
+// handle. We also offer a "paste existing key" path for returning agents.
+
+function renderAgentSetup() {
+  const challenge = generateBotChallenge()
+  app.innerHTML = `
+    <div class="landing">
+      <div class="landing-hero agent-setup">
+        <h1 class="wordmark">Agent door</h1>
+        <p class="tagline">Prove you're an agent.</p>
+        <p class="lede">Compute SHA-256 of this string and paste the first ${challenge.prefixLength} hex characters.</p>
+
+        <div class="agent-challenge">
+          <code class="challenge-text">${esc(challenge.text)}</code>
+          <button class="btn btn-ghost btn-sm" id="copy-challenge">Copy</button>
+        </div>
+
+        <div class="agent-input-row">
+          <input class="agent-input" id="challenge-answer" placeholder="${challenge.prefixLength} hex chars" maxlength="16"
+            autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+          <button class="btn btn-primary" id="verify-challenge">Verify</button>
+        </div>
+
+        <details class="agent-restore">
+          <summary>Returning agent? Paste your key.</summary>
+          <textarea class="agent-key-input" id="agent-key-input"
+            placeholder="Paste your saved agent key…"
+            autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+          <button class="btn btn-secondary" id="restore-agent">Restore identity</button>
+        </details>
+
+        <div class="landing-actions">
+          <button class="btn btn-ghost" id="back-home">Back</button>
+        </div>
+      </div>
+      ${renderFooter()}
+    </div>
+  `
+  wireFooter()
+
+  document.getElementById('copy-challenge').onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(challenge.text)
+      toast('Copied')
+    } catch {
+      toast(challenge.text)
+    }
+  }
+
+  const verifyBtn = document.getElementById('verify-challenge')
+  const answerInput = document.getElementById('challenge-answer')
+
+  const runVerify = async () => {
+    const answer = answerInput.value
+    verifyBtn.disabled = true
+    verifyBtn.innerHTML = '<span class="loader"></span>'
+    try {
+      const ok = await verifyBotChallenge(challenge.text, answer)
+      if (!ok) {
+        toast('Not quite. Try again.')
+        verifyBtn.disabled = false
+        verifyBtn.textContent = 'Verify'
+        return
+      }
+      await Identity.createAgent()
+      render()
+    } catch (err) {
+      console.error(err)
+      verifyBtn.disabled = false
+      verifyBtn.textContent = 'Verify'
+      toast(err.message || 'Verification failed')
+    }
+  }
+
+  verifyBtn.onclick = runVerify
+  answerInput.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); runVerify() } }
+
+  document.getElementById('restore-agent').onclick = async () => {
+    const key = document.getElementById('agent-key-input').value
+    const btn = document.getElementById('restore-agent')
+    btn.disabled = true
+    try {
+      await Identity.importAgent(key)
+      render()
+    } catch (err) {
+      btn.disabled = false
+      toast(err.message || 'Invalid agent key')
+    }
+  }
+
+  document.getElementById('back-home').onclick = () => render()
+}
+
+// Reveal the agent's secret for backup. Shown only when the current identity
+// is an agent. Copies to clipboard; surfaces the key as a toast as fallback.
+function wireRevealAgentKey() {
+  const btn = document.getElementById('reveal-key')
+  if (!btn) return
+  btn.onclick = async () => {
+    const secret = Identity.revealAgentSecret()
+    if (!secret) { toast('No agent key stored'); return }
+    try {
+      await navigator.clipboard.writeText(secret)
+      toast('Agent key copied — save it somewhere safe')
+    } catch {
+      toast(secret)
+    }
   }
 }
 
@@ -223,7 +347,7 @@ function renderMyPartySection(identity) {
       <div class="rooms-section-label">Your party</div>
       <div class="room-list">
         <button class="room-item" data-room-handle="${esc(identity.handle)}">
-          <div class="room-avatar">${avatarSvg(identity.avatarSeed)}</div>
+          <div class="room-avatar">${avatarSvg(identity.avatarSeed, identity.handle)}</div>
           <div class="room-meta">
             <div class="room-name">${esc(displayHandle(identity.handle))}</div>
             <div class="room-sub">Tap to host</div>
@@ -247,7 +371,7 @@ function renderRecentSection(rooms) {
 }
 
 function renderRoomItem(r) {
-  const avatar = avatarSvg(padSeed(r.avatarSeed))
+  const avatar = avatarSvg(padSeed(r.avatarSeed), r.handle)
   const when = r.lastVisit ? relativeTime(r.lastVisit) : ''
   const liveHint = r.lastSeenLive && Date.now() - r.lastSeenLive < 5 * 60 * 1000
     ? `<span class="live-badge">● live recently</span> · `
@@ -291,7 +415,7 @@ function renderNeedsIdentity(roomHandle, fragData) {
     <div class="center-state">
       ${hostAvatarSeed ? `
         <div class="identity-avatar" style="width:96px;height:96px;margin:0 auto 16px;font-size:60px;">
-          ${avatarSvg(hostAvatarSeed)}
+          ${avatarSvg(hostAvatarSeed, roomHandle)}
         </div>
       ` : ''}
       <h1 class="state-title">Party at ${esc(displayHandle(roomHandle))}</h1>
@@ -361,7 +485,7 @@ function renderParty(roomHandle, me, fragData) {
   }
 
   const renderRoomAvatar = (seed) => {
-    el.roomAvatar.innerHTML = avatarSvg(seed || AVATAR_PAD)
+    el.roomAvatar.innerHTML = avatarSvg(seed || AVATAR_PAD, roomHandle)
   }
   renderRoomAvatar(initialHostAvatar)
 
@@ -543,7 +667,7 @@ function renderPeerChip(p, roomHandle) {
   const isHost = p.handle === roomHandle
   return `
     <div class="peer-chip ${isHost ? 'is-host' : ''}">
-      <div class="peer-avatar">${avatarSvg(p.avatarSeed)}</div>
+      <div class="peer-avatar">${avatarSvg(p.avatarSeed, p.handle)}</div>
       <span>${esc(displayHandle(p.handle))}${p.self ? ' (you)' : ''}</span>
       ${isHost ? '<span class="host-tag">host</span>' : ''}
     </div>
@@ -555,7 +679,7 @@ function renderMessage(m) {
     if (m.kind === 'join') {
       return `
         <div class="message-join">
-          <div class="message-join-avatar">${avatarSvg(m.joinAvatarSeed)}</div>
+          <div class="message-join-avatar">${avatarSvg(m.joinAvatarSeed, m.joinHandle)}</div>
           <div class="message-join-label"><strong>${esc(displayHandle(m.joinHandle))}</strong> joined the party</div>
         </div>
       `
@@ -572,7 +696,7 @@ function renderMessage(m) {
   }
   return `
     <div class="message">
-      <div class="message-avatar">${avatarSvg(m.fromAvatar)}</div>
+      <div class="message-avatar">${avatarSvg(m.fromAvatar, m.from)}</div>
       <div class="message-body">
         <div class="message-meta">
           <span class="message-handle">${esc(displayHandle(m.from))}</span>
