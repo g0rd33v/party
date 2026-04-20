@@ -27,6 +27,7 @@ const [
   },
   { RoomHistory, relativeTime },
   { Theme },
+  { playConnect, playReceive, playSend },
 ] = await Promise.all([
   import(`./lib/util.js${V}`),
   import(`./lib/avatar.js${V}`),
@@ -36,6 +37,7 @@ const [
   import(`./lib/url.js${V}`),
   import(`./lib/rooms.js${V}`),
   import(`./lib/theme.js${V}`),
+  import(`./lib/sounds.js${V}`),
 ])
 
 const HOST_SEARCH_TIMEOUT_MS = 60000
@@ -567,6 +569,7 @@ function renderParty(roomHandle, me, fragData) {
     const text = el.input.value.trim()
     if (!text || state.partyOver) return
     const msg = activeMesh.send(text)
+    playSend()
     addMessage(msg)
     el.input.value = ''
     el.send.disabled = true
@@ -585,7 +588,11 @@ function renderParty(roomHandle, me, fragData) {
   const mesh = new Mesh(roomHandle, me, sessionId)
   activeMesh = mesh
 
-  mesh.onMessage = (m) => addMessage(m, true)
+  mesh.onMessage = (m) => {
+    playReceive()
+    addMessage(m, true)
+  }
+  let firstHostSeen = false
   mesh.onPeersChange = (peers) => {
     state.peers = peers
     const host = peers.find(p => p.handle === roomHandle)
@@ -598,6 +605,10 @@ function renderParty(roomHandle, me, fragData) {
         sessionId,
       })
       RoomHistory.markLive(roomHandle)
+      if (!firstHostSeen) {
+        firstHostSeen = true
+        playConnect()
+      }
     }
     renderPeers()
     updateStatus()
