@@ -409,6 +409,13 @@ function renderParty(roomHandle, me, fragData) {
     el.messages.scrollTop = el.messages.scrollHeight
   }
 
+  // Retry: tapping "Try again" on a party-over alert reloads the page, which
+  // re-establishes identity and re-joins the mesh with a fresh signaling attempt.
+  el.messages.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-retry]')
+    if (btn) window.location.reload()
+  })
+
   const addMessage = (m, persist = true) => {
     state.messages.push(m)
     renderMessages()
