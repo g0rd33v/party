@@ -266,6 +266,7 @@ input, textarea {
   overflow: hidden;
   background: var(--avatar-bg);
   border: 1px solid var(--border);
+  font-size: 58px;
 }
 
 .identity-handle {
@@ -311,6 +312,7 @@ input, textarea {
   background: var(--avatar-bg);
   flex-shrink: 0;
   border: 1px solid var(--border);
+  font-size: 22px;
 }
 
 .party-title {
@@ -402,6 +404,7 @@ input, textarea {
   border-radius: 50%;
   overflow: hidden;
   background: var(--avatar-bg);
+  font-size: 15px;
 }
 .peer-chip .host-tag {
   font-size: 10px;
@@ -436,6 +439,7 @@ input, textarea {
   background: var(--avatar-bg);
   flex-shrink: 0;
   margin-top: 2px;
+  font-size: 18px;
 }
 
 .message-body {
@@ -496,6 +500,7 @@ input, textarea {
   background: var(--avatar-bg);
   flex-shrink: 0;
   border: 1px solid var(--border);
+  font-size: 14px;
 }
 
 .message-join-label {
@@ -639,27 +644,23 @@ input, textarea {
   opacity: 1;
 }
 
-/* ========== Avatar (Twemoji image) ==========
-   The avatar renderer returns <div class="emoji-avatar"><img ...></div>.
-   Each avatar container sets its own width/height; the emoji-avatar fills
-   the container and centers the image with a bit of breathing room. */
+/* ========== Avatar (native system emoji) ==========
+   The avatar renderer returns <div class="emoji-avatar">EMOJI</div>.
+   Each avatar container sets its own width/height and font-size; the
+   .emoji-avatar fills the container and inherits font-size for glyph scaling.
+   Font cascade picks the native emoji font per platform. */
 
 .emoji-avatar {
   width: 100%;
   height: 100%;
   background: var(--avatar-bg);
-  display: grid;
-  place-items: center;
-}
-
-.emoji-avatar img {
-  width: 72%;
-  height: 72%;
-  object-fit: contain;
-  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', 'Twemoji Mozilla', 'EmojiOne Color', system-ui, sans-serif;
   user-select: none;
   -webkit-user-select: none;
-  -webkit-user-drag: none;
 }
 
 /* ========== Loader ========== */
@@ -768,6 +769,7 @@ input, textarea {
   background: var(--avatar-bg);
   flex-shrink: 0;
   border: 1px solid var(--border);
+  font-size: 24px;
 }
 
 .room-meta {
