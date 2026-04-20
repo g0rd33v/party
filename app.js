@@ -429,15 +429,14 @@ const Store = {
 // ---------- Mesh (Trystero) ----------
 
 class Mesh {
-  constructor(roomHandle, me) {
+  constructor(roomHandle, me, sessionId = null) {
     this.roomHandle = roomHandle
     this.me = me // { handle, avatarSeed }
+    this.sessionId = sessionId
     this.peers = new Map() // peerId -> { handle, avatarSeed }
-    this.announcedHandles = new Set() // handles we've already shown join notices for
+    this.announcedHandles = new Set() // handles we've already fired join notice for
     this.startedAt = 0
-    this.room = null
-    this.sendMsg = null
-    this.sendHello = null
+    this.rooms = [] // [{ room, sendMsg, sendHello }]
     this.onMessage = () => {}
     this.onPeersChange = () => {}
     this.onHostStatusChange = () => {}
@@ -446,32 +445,41 @@ class Mesh {
 
   start() {
     this.startedAt = Date.now()
-    this.room = joinRoom({ appId: APP_ID }, this.roomHandle)
+    // Main handle room — everyone with the bare link lands here
+    this._joinOne(this.roomHandle)
+    // Session accelerator room (if URL had #s=…) — pairs fast because it's a small set
+    if (this.sessionId) {
+      this._joinOne(`s-${this.sessionId}`)
+    }
+  }
 
-    const [sendMsg, getMsg] = this.room.makeAction('msg')
-    const [sendHello, getHello] = this.room.makeAction('hello')
-    this.sendMsg = sendMsg
-    this.sendHello = sendHello
+  _joinOne(roomId) {
+    const room = joinRoom({ appId: APP_ID }, roomId)
+    const [sendMsg, getMsg] = room.makeAction('msg')
+    const [sendHello, getHello] = room.makeAction('hello')
 
-    this.room.onPeerJoin(peerId => {
-      // Introduce ourselves to new peer
+    room.onPeerJoin(peerId => {
       sendHello({ handle: this.me.handle, avatarSeed: this.me.avatarSeed }, peerId)
     })
 
-    this.room.onPeerLeave(peerId => {
+    room.onPeerLeave(peerId => {
       const was = this.peers.get(peerId)
+      if (!was) return
       this.peers.delete(peerId)
       this.onPeersChange(this.peerList())
-      // If host left, start grace timer — they may briefly reconnect
-      if (was && was.handle === this.roomHandle) {
-        if (this.hostGraceTimer) clearTimeout(this.hostGraceTimer)
-        this.hostGraceTimer = setTimeout(() => {
-          // Check whether host returned during the grace window
-          const hostStillGone = !Array.from(this.peers.values())
-            .some(p => p.handle === this.roomHandle)
-          if (hostStillGone) this.onHostStatusChange(false)
-          this.hostGraceTimer = null
-        }, HOST_GRACE_MS)
+      // If host left this connection, check whether they're still reachable via another room
+      if (was.handle === this.roomHandle) {
+        const hostStillHere = Array.from(this.peers.values())
+          .some(p => p.handle === this.roomHandle)
+        if (!hostStillHere) {
+          if (this.hostGraceTimer) clearTimeout(this.hostGraceTimer)
+          this.hostGraceTimer = setTimeout(() => {
+            const stillGone = !Array.from(this.peers.values())
+              .some(p => p.handle === this.roomHandle)
+            if (stillGone) this.onHostStatusChange(false)
+            this.hostGraceTimer = null
+          }, HOST_GRACE_MS)
+        }
       }
     })
 
@@ -483,13 +491,10 @@ class Mesh {
       this.peers.set(peerId, { handle: data.handle, avatarSeed: data.avatarSeed })
       this.announcedHandles.add(data.handle)
       this.onPeersChange(this.peerList())
-      // Fire a join notice only after the initial catchup window (2s) —
-      // avoids spamming existing peers who we meet on first connect.
       if (isNewPeer && isNewHandle && Date.now() - this.startedAt > 2000) {
         this.onPeerJoined(data.handle, data.avatarSeed)
       }
       if (data.handle === this.roomHandle) {
-        // Host is present — cancel any pending grace timer
         if (this.hostGraceTimer) {
           clearTimeout(this.hostGraceTimer)
           this.hostGraceTimer = null
@@ -511,14 +516,22 @@ class Mesh {
         text: data.text.slice(0, 2000),
         ts: Number.isFinite(data.ts) ? Math.min(data.ts, Date.now()) : Date.now(),
       }
+      // View-layer dedupes by id, so we can hand off every copy we receive
       this.onMessage(msg)
     })
+
+    this.rooms.push({ room, sendMsg, sendHello })
   }
 
   peerList() {
+    // Same person may appear in both main+session rooms — dedupe by handle
+    const seen = new Set([this.me.handle])
     const list = [{ ...this.me, self: true }]
-    for (const p of this.peers.values()) list.push(p)
-    // Host first, then alphabetical
+    for (const p of this.peers.values()) {
+      if (seen.has(p.handle)) continue
+      seen.add(p.handle)
+      list.push(p)
+    }
     list.sort((a, b) => {
       const aHost = a.handle === this.roomHandle ? 0 : 1
       const bHost = b.handle === this.roomHandle ? 0 : 1
@@ -534,7 +547,10 @@ class Mesh {
       ts: Date.now(),
       text,
     }
-    if (this.sendMsg) this.sendMsg(msg)
+    // Broadcast through every room we're in. Dedup happens on receive.
+    for (const r of this.rooms) {
+      try { r.sendMsg(msg) } catch {}
+    }
     return {
       id: msg.id,
       room: this.roomHandle,
@@ -546,12 +562,15 @@ class Mesh {
   }
 
   leave() {
-    if (this.room) {
-      try {
-        this.room.leave()
-      } catch {}
+    for (const r of this.rooms) {
+      try { r.room.leave() } catch {}
     }
+    this.rooms = []
     this.peers.clear()
+    if (this.hostGraceTimer) {
+      clearTimeout(this.hostGraceTimer)
+      this.hostGraceTimer = null
+    }
   }
 }
 
@@ -696,10 +715,22 @@ function renderParty(roomHandle, me) {
   }
 
   const amHost = roomHandle === me.handle
+
+  // Session accelerator: a small extra Trystero room shared between host & guest
+  // so WebRTC pairing finds them faster than via the crowded main room.
+  // Host generates fresh on page load; guest reads from URL fragment.
+  const urlSessionMatch = location.hash.match(/s=([a-z0-9]+)/i)
+  let sessionId = urlSessionMatch ? urlSessionMatch[1] : null
+  if (!sessionId && amHost) {
+    const bytes = crypto.getRandomValues(new Uint8Array(8))
+    sessionId = Array.from(bytes).map(b => b.toString(36).padStart(2, '0')).join('').slice(0, 12)
+  }
+
   const state = {
     roomHandle,
     me,
     amHost,
+    sessionId,
     messages: [],
     peers: [{ ...me, self: true }],
     hostPresent: amHost,
@@ -743,7 +774,8 @@ function renderParty(roomHandle, me) {
   const sendBtn = document.getElementById('compose-send')
 
   document.getElementById('share-btn').onclick = async () => {
-    const url = `${location.origin}/party/${roomHandle}`
+    const frag = sessionId ? `#s=${sessionId}` : ''
+    const url = `${location.origin}/party/${roomHandle}${frag}`
     const data = { title: 'Party', text: `Join ${displayHandle(roomHandle)} on Party`, url }
     if (navigator.share) {
       try { await navigator.share(data) } catch {}
@@ -863,7 +895,7 @@ function renderParty(roomHandle, me) {
   }).catch(console.error)
 
   // Start mesh
-  const mesh = new Mesh(roomHandle, me)
+  const mesh = new Mesh(roomHandle, me, sessionId)
   activeMesh = mesh
 
   mesh.onMessage = (m) => addMessage(m, true)
