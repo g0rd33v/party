@@ -40,7 +40,6 @@ const [
   import(`./lib/sounds.js${V}`),
 ])
 
-const HOST_SEARCH_TIMEOUT_MS = 60000
 const AVATAR_PAD = '0'.repeat(32)
 
 const app = document.getElementById('app')
@@ -491,7 +490,6 @@ function renderParty(roomHandle, me, fragData) {
     messages: [],
     peers: [{ ...me, self: true }],
     hostPresent: amHost,
-    partyOver: false,
   }
 
   app.innerHTML = partyShell(roomHandle, amHost)
@@ -515,30 +513,16 @@ function renderParty(roomHandle, me, fragData) {
   document.getElementById('rooms-btn').onclick = navigateToRooms
   document.getElementById('home-btn').onclick = navigateHome
 
-  el.messages.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-retry]')
-    if (!btn) return
-    e.preventDefault()
-    console.log('[party] retry tapped — re-entering flow')
-    render()
-  })
-
   const updateStatus = () => {
-    if (state.partyOver) {
-      el.statusDot.classList.add('offline')
-      el.statusText.textContent = "Party's over"
-      el.input.disabled = true
-      el.send.disabled = true
-      return
-    }
     el.statusDot.classList.remove('offline')
     const count = state.peers.length
     if (amHost) {
       el.statusText.textContent = `Hosting · ${count} ${count === 1 ? 'person' : 'people'}`
-    } else if (state.hostPresent) {
-      el.statusText.textContent = `Live · ${count} ${count === 1 ? 'person' : 'people'}`
+    } else if (count <= 1) {
+      // Only me here — keep the room alive, nudge to share
+      el.statusText.textContent = 'Just you here · share the link'
     } else {
-      el.statusText.textContent = 'Looking for host…'
+      el.statusText.textContent = `Live · ${count} people`
     }
   }
 
@@ -555,13 +539,6 @@ function renderParty(roomHandle, me, fragData) {
     el.messages.scrollTop = el.messages.scrollHeight
   }
 
-  // Retry: tapping "Try again" on a party-over alert reloads the page, which
-  // re-establishes identity and re-joins the mesh with a fresh signaling attempt.
-  el.messages.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-retry]')
-    if (btn) window.location.reload()
-  })
-
   const addMessage = (m, persist = true) => {
     state.messages.push(m)
     renderMessages()
@@ -569,11 +546,11 @@ function renderParty(roomHandle, me, fragData) {
   }
 
   el.input.oninput = () => {
-    el.send.disabled = el.input.value.trim().length === 0 || state.partyOver
+    el.send.disabled = el.input.value.trim().length === 0
   }
   const doSend = () => {
     const text = el.input.value.trim()
-    if (!text || state.partyOver) return
+    if (!text) return
     const msg = activeMesh.send(text)
     playSend()
     addMessage(msg)
@@ -595,7 +572,7 @@ function renderParty(roomHandle, me, fragData) {
   activeMesh = mesh
 
   mesh.onMessage = (m) => {
-    playReceive()
+    if (!m.replayed) playReceive()
     addMessage(m, true)
   }
   let firstHostSeen = false
@@ -620,16 +597,26 @@ function renderParty(roomHandle, me, fragData) {
     updateStatus()
   }
   mesh.onHostStatusChange = (present) => {
+    const was = state.hostPresent
     state.hostPresent = present
-    if (!present && !amHost) {
-      state.partyOver = true
+    // Don't end the party when the host leaves — the room stays alive for
+    // anyone who's still here. Just drop an inline note so the remaining
+    // peers know the original host stepped away.
+    if (was && !present && !amHost) {
       addMessage({
-        id: `sys-${Date.now()}`,
+        id: `sys-host-away-${Date.now()}`,
         room: roomHandle,
-        text: `${displayHandle(roomHandle)} left. Party's over.`,
+        text: `${displayHandle(roomHandle)} stepped away. Room stays open.`,
         ts: Date.now(),
         system: true,
-        kind: 'retry-alert',
+      }, false)
+    } else if (!was && present && !amHost) {
+      addMessage({
+        id: `sys-host-back-${Date.now()}`,
+        room: roomHandle,
+        text: `${displayHandle(roomHandle)} is back.`,
+        ts: Date.now(),
+        system: true,
       }, false)
     }
     updateStatus()
@@ -649,20 +636,6 @@ function renderParty(roomHandle, me, fragData) {
   mesh.start()
   renderPeers()
   updateStatus()
-
-  setTimeout(() => {
-    if (!amHost && !state.hostPresent && !state.partyOver) {
-      state.partyOver = true
-      addMessage({
-        id: `sys-offline-${Date.now()}`,
-        room: roomHandle,
-        text: `${displayHandle(roomHandle)} isn't hosting right now. Come back later.`,
-        ts: Date.now(),
-        system: true,
-      }, false)
-      updateStatus()
-    }
-  }, HOST_SEARCH_TIMEOUT_MS)
 }
 
 function partyShell(roomHandle, amHost) {
@@ -712,14 +685,6 @@ function renderMessage(m) {
         <div class="message-join">
           <div class="message-join-avatar">${avatarSvg(m.joinAvatarSeed, m.joinHandle)}</div>
           <div class="message-join-label"><strong>${esc(displayHandle(m.joinHandle))}</strong> joined the party</div>
-        </div>
-      `
-    }
-    if (m.kind === 'retry-alert') {
-      return `
-        <div class="message-alert">
-          <div class="message-alert-text">${esc(m.text)}</div>
-          <button class="retry-btn" data-retry="1">Try again</button>
         </div>
       `
     }
