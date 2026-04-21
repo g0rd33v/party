@@ -569,6 +569,14 @@ input, textarea {
   margin-left: 4px;
 }
 
+.messages-wrap {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .messages {
   flex: 1;
   overflow-y: auto;
@@ -577,6 +585,57 @@ input, textarea {
   flex-direction: column;
   gap: 12px;
   -webkit-overflow-scrolling: touch;
+}
+
+/* Floating badge that appears when new messages arrive while the user is
+   scrolled up reading older content. Tapping it jumps to the bottom. */
+.unread-badge {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translate(-50%, 8px);
+  background: var(--text);
+  color: var(--bg);
+  border: none;
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25), 0 1px 2px rgba(0, 0, 0, 0.15);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  z-index: 5;
+}
+.unread-badge.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, 0);
+}
+.unread-badge:hover { filter: brightness(0.92); }
+.unread-badge:active { transform: translate(-50%, 1px); }
+
+/* Clickable handle / avatar affordance — every name & avatar of a non-self
+   peer is tappable to jump into that peer's room. */
+.is-clickable {
+  cursor: pointer;
+  transition: opacity 0.12s ease, transform 0.06s ease;
+}
+.is-clickable:hover { opacity: 0.78; }
+.is-clickable:active { transform: scale(0.97); }
+.peer-chip.is-clickable:hover {
+  border-color: var(--border-2);
+}
+.message-handle.is-clickable {
+  text-decoration: none;
+  border-bottom: 1px dotted transparent;
+}
+.message-handle.is-clickable:hover {
+  border-bottom-color: var(--text-dim);
+  opacity: 1;
 }
 
 .message {

@@ -43,8 +43,19 @@ const [
 const AVATAR_PAD = '0'.repeat(32)
 
 const app = document.getElementById('app')
-let activeMesh = null
-let stopFragmentMaintenance = null
+
+// Background meshes the user is currently a peer of. Multiple rooms can be
+// kept alive at once — every room you visit while online stays subscribed
+// in the background, so you remain present (and a history torchbearer) in
+// every room you've touched. Closing the browser tab is the only way to
+// fully leave; explicit "Leave room" UI can be added later if needed.
+//
+// Keyed by roomHandle. Each entry is { mesh, messages, peers, hostPresent,
+// onMessage, onPeersChange, onHostStatusChange, onPeerJoined } — the
+// per-room state that the visible view binds to when you switch in.
+const liveRooms = new Map()
+let activeRoomHandle = null         // which room the UI is currently showing
+const ACTIVE_FRAGMENT_MAINTAINER = new Map() // handle → stopFn for whichever room is amHost
 
 // Pad a short (16-char) fragment seed out to a full avatar seed for rendering
 function padSeed(seed) {
@@ -466,31 +477,134 @@ function renderNeedsIdentity(roomHandle, fragData) {
 
 // ==================== PARTY ROOM ====================
 
-function renderParty(roomHandle, me, fragData) {
-  cleanupActiveSession()
+// Create the persistent state for a room and wire its mesh callbacks.
+// Idempotent: calling it again for a room you're already in returns the
+// existing state. The mesh keeps subscribing/publishing/holding history
+// independently of whether the UI is currently showing this room.
+function ensureRoomAlive(roomHandle, me, fragData) {
+  if (liveRooms.has(roomHandle)) return liveRooms.get(roomHandle)
 
   const amHost = roomHandle === me.handle
-
-  const sessionId = fragData.sessionId || (amHost ? generateSessionId() : null)
+  const sessionId = (fragData && fragData.sessionId) || (amHost ? generateSessionId() : null)
 
   // Record visit to rooms history (with any avatar/session info we already know)
   RoomHistory.record(roomHandle, {
-    avatarSeed: amHost ? me.avatarSeed.slice(0, 16) : fragData.avatarSeed,
+    avatarSeed: amHost ? me.avatarSeed.slice(0, 16) : (fragData && fragData.avatarSeed),
     sessionId,
   })
 
-  const initialHostAvatar = amHost ? me.avatarSeed : padSeed(fragData.avatarSeed)
-
-  if (amHost) {
-    stopFragmentMaintenance = maintainHostFragment(sessionId, me.avatarSeed)
+  // Hosts continuously refresh the URL fragment so guests get fresh connection
+  // info. Tracked per-room so switching rooms doesn't clobber the maintainer.
+  if (amHost && !ACTIVE_FRAGMENT_MAINTAINER.has(roomHandle)) {
+    ACTIVE_FRAGMENT_MAINTAINER.set(roomHandle, maintainHostFragment(sessionId, me.avatarSeed))
   }
 
-  const state = {
+  const room = {
     roomHandle, me, amHost, sessionId,
     messages: [],
     peers: [{ ...me, self: true }],
+    hostAvatarSeed: amHost ? me.avatarSeed : padSeed(fragData && fragData.avatarSeed),
     hostPresent: amHost,
+    seenMsgIds: new Set(),
+    firstHostSeen: amHost, // host doesn't need a connect chime for their own room
+    view: null,            // populated by bindPartyView, cleared by unbind
+    mesh: null,
   }
+  liveRooms.set(roomHandle, room)
+
+  // Hydrate from persisted IndexedDB history once
+  Store.prune().catch(() => {})
+  Store.getMessages(roomHandle).then(history => {
+    for (const m of history) {
+      if (room.seenMsgIds.has(m.id)) continue
+      room.seenMsgIds.add(m.id)
+      room.messages.push(m)
+    }
+    if (room.view) room.view.renderMessages()
+  }).catch(console.error)
+
+  const mesh = new Mesh(roomHandle, me, sessionId)
+  room.mesh = mesh
+
+  mesh.onMessage = (m) => {
+    if (room.seenMsgIds.has(m.id)) return
+    room.seenMsgIds.add(m.id)
+    room.messages.push(m)
+    if (!m.system) Store.addMessage(m).catch(console.error)
+    if (room.view && !m.replayed) playReceive()
+    if (room.view) room.view.renderMessages({ newArrival: !m.replayed })
+  }
+  mesh.onPeersChange = (peers) => {
+    room.peers = peers
+    const host = peers.find(p => p.handle === roomHandle)
+    if (host) {
+      room.hostPresent = true
+      room.hostAvatarSeed = host.avatarSeed
+      RoomHistory.record(roomHandle, {
+        avatarSeed: host.avatarSeed ? host.avatarSeed.slice(0, 16) : null,
+        sessionId,
+      })
+      RoomHistory.markLive(roomHandle)
+      if (!room.firstHostSeen) {
+        room.firstHostSeen = true
+        if (room.view) playConnect()
+      }
+    }
+    if (room.view) {
+      room.view.renderRoomAvatar(room.hostAvatarSeed)
+      room.view.renderPeers()
+      room.view.updateStatus()
+    }
+  }
+  mesh.onHostStatusChange = (present) => {
+    const was = room.hostPresent
+    room.hostPresent = present
+    if (was && !present && !amHost) {
+      const sysMsg = {
+        id: `sys-host-away-${Date.now()}`,
+        room: roomHandle,
+        text: `${displayHandle(roomHandle)} stepped away. Room stays open.`,
+        ts: Date.now(),
+        system: true,
+      }
+      room.messages.push(sysMsg)
+      if (room.view) room.view.renderMessages({ newArrival: true })
+    } else if (!was && present && !amHost) {
+      const sysMsg = {
+        id: `sys-host-back-${Date.now()}`,
+        room: roomHandle,
+        text: `${displayHandle(roomHandle)} is back.`,
+        ts: Date.now(),
+        system: true,
+      }
+      room.messages.push(sysMsg)
+      if (room.view) room.view.renderMessages({ newArrival: true })
+    }
+    if (room.view) room.view.updateStatus()
+  }
+  mesh.onPeerJoined = (handle, avatarSeed) => {
+    const sysMsg = {
+      id: `sys-join-${handle}-${Date.now()}`,
+      room: roomHandle,
+      ts: Date.now(),
+      system: true,
+      kind: 'join',
+      joinHandle: handle,
+      joinAvatarSeed: avatarSeed,
+    }
+    room.messages.push(sysMsg)
+    if (room.view) room.view.renderMessages({ newArrival: true })
+  }
+
+  mesh.start()
+  return room
+}
+
+// Bind the visible UI to a room. Replaces #app with the party shell, wires
+// DOM events, and stores render closures on room.view so the background mesh
+// callbacks can drive the UI when this room is active.
+function bindPartyView(room) {
+  const { roomHandle, me, amHost } = room
 
   app.innerHTML = partyShell(roomHandle, amHost)
 
@@ -507,19 +621,13 @@ function renderParty(roomHandle, me, fragData) {
   const renderRoomAvatar = (seed) => {
     el.roomAvatar.innerHTML = avatarSvg(seed || AVATAR_PAD, roomHandle)
   }
-  renderRoomAvatar(initialHostAvatar)
-
-  document.getElementById('share-btn').onclick = () => handleShare(roomHandle, me, sessionId, amHost)
-  document.getElementById('rooms-btn').onclick = navigateToRooms
-  document.getElementById('home-btn').onclick = navigateHome
 
   const updateStatus = () => {
     el.statusDot.classList.remove('offline')
-    const count = state.peers.length
+    const count = room.peers.length
     if (amHost) {
       el.statusText.textContent = `Hosting · ${count} ${count === 1 ? 'person' : 'people'}`
     } else if (count <= 1) {
-      // Only me here — keep the room alive, nudge to share
       el.statusText.textContent = 'Just you here · share the link'
     } else {
       el.statusText.textContent = `Live · ${count} people`
@@ -527,22 +635,80 @@ function renderParty(roomHandle, me, fragData) {
   }
 
   const renderPeers = () => {
-    el.peers.innerHTML = state.peers.map(p => renderPeerChip(p, roomHandle)).join('')
+    el.peers.innerHTML = room.peers.map(p => renderPeerChip(p, roomHandle)).join('')
+    wireHandleClicks(el.peers, me.handle)
   }
 
-  const renderMessages = () => {
+  // Smart scroll-to-bottom behavior:
+  //   - If the user was at (or near) the bottom when a new message lands, we
+  //     stick to the bottom and keep them following the conversation.
+  //   - If they've scrolled up to read older messages, we DON'T jerk them
+  //     back to the bottom. Instead we show a "↓ new messages" badge that
+  //     they can tap to jump back down.
+  // Threshold of 80px is generous — it accommodates inertial scroll on iOS
+  // and tiny offsets from sub-pixel layout, while still detecting genuine
+  // upward intent.
+  const STICK_THRESHOLD = 80
+  let unreadCount = 0
+
+  const isNearBottom = () => {
+    const el2 = el.messages
+    return (el2.scrollHeight - el2.scrollTop - el2.clientHeight) <= STICK_THRESHOLD
+  }
+
+  const scrollToBottom = (smooth = false) => {
+    // Defer past layout so scrollHeight reflects the just-rendered content —
+    // doing the write synchronously can race iOS Safari's layout pass and the
+    // scroll silently no-ops.
+    requestAnimationFrame(() => {
+      try {
+        el.messages.scrollTo({ top: el.messages.scrollHeight, behavior: smooth ? 'smooth' : 'auto' })
+      } catch {
+        el.messages.scrollTop = el.messages.scrollHeight
+      }
+    })
+    unreadCount = 0
+    updateUnreadBadge()
+  }
+
+  const updateUnreadBadge = () => {
+    const badge = document.getElementById('unread-badge')
+    if (!badge) return
+    if (unreadCount > 0) {
+      badge.textContent = `↓ ${unreadCount} new`
+      badge.classList.add('is-visible')
+    } else {
+      badge.classList.remove('is-visible')
+    }
+  }
+
+  // Called whenever the user manually scrolls. If they reach the bottom, the
+  // unread counter resets and the badge hides. If they scroll back up, the
+  // counter keeps accumulating from any new messages that land.
+  el.messages.onscroll = () => {
+    if (isNearBottom()) {
+      unreadCount = 0
+      updateUnreadBadge()
+    }
+  }
+
+  const renderMessages = (opts = {}) => {
+    const stickToBottom = opts.stickToBottom != null ? opts.stickToBottom : isNearBottom()
+    const isNewArrival = !!opts.newArrival
+
     const seen = new Set()
-    const list = state.messages
+    const list = room.messages
       .filter(m => { if (seen.has(m.id)) return false; seen.add(m.id); return true })
       .sort((a, b) => a.ts - b.ts)
     el.messages.innerHTML = list.map(renderMessage).join('')
-    el.messages.scrollTop = el.messages.scrollHeight
-  }
+    wireHandleClicks(el.messages, me.handle)
 
-  const addMessage = (m, persist = true) => {
-    state.messages.push(m)
-    renderMessages()
-    if (persist && !m.system) Store.addMessage(m).catch(console.error)
+    if (stickToBottom) {
+      scrollToBottom(false)
+    } else if (isNewArrival) {
+      unreadCount += 1
+      updateUnreadBadge()
+    }
   }
 
   el.input.oninput = () => {
@@ -551,9 +717,14 @@ function renderParty(roomHandle, me, fragData) {
   const doSend = () => {
     const text = el.input.value.trim()
     if (!text) return
-    const msg = activeMesh.send(text)
+    const local = room.mesh.send(text)
     playSend()
-    addMessage(msg)
+    if (!room.seenMsgIds.has(local.id)) {
+      room.seenMsgIds.add(local.id)
+      room.messages.push(local)
+      Store.addMessage(local).catch(console.error)
+      renderMessages({ stickToBottom: true })
+    }
     el.input.value = ''
     el.send.disabled = true
   }
@@ -562,80 +733,50 @@ function renderParty(roomHandle, me, fragData) {
     if (e.key === 'Enter') { e.preventDefault(); doSend() }
   }
 
-  Store.prune().catch(() => {})
-  Store.getMessages(roomHandle).then(history => {
-    for (const m of history) state.messages.push(m)
-    renderMessages()
-  }).catch(console.error)
+  document.getElementById('share-btn').onclick = () => handleShare(roomHandle, me, room.sessionId, amHost)
+  document.getElementById('rooms-btn').onclick = navigateToRooms
+  document.getElementById('home-btn').onclick = navigateHome
+  document.getElementById('unread-badge').onclick = () => scrollToBottom(true)
 
-  const mesh = new Mesh(roomHandle, me, sessionId)
-  activeMesh = mesh
-
-  mesh.onMessage = (m) => {
-    if (!m.replayed) playReceive()
-    addMessage(m, true)
-  }
-  let firstHostSeen = false
-  mesh.onPeersChange = (peers) => {
-    state.peers = peers
-    const host = peers.find(p => p.handle === roomHandle)
-    if (host) {
-      state.hostPresent = true
-      renderRoomAvatar(host.avatarSeed)
-      // Update history with freshly-seen host avatar & live timestamp
-      RoomHistory.record(roomHandle, {
-        avatarSeed: host.avatarSeed ? host.avatarSeed.slice(0, 16) : null,
-        sessionId,
-      })
-      RoomHistory.markLive(roomHandle)
-      if (!firstHostSeen) {
-        firstHostSeen = true
-        playConnect()
-      }
-    }
-    renderPeers()
-    updateStatus()
-  }
-  mesh.onHostStatusChange = (present) => {
-    const was = state.hostPresent
-    state.hostPresent = present
-    // Don't end the party when the host leaves — the room stays alive for
-    // anyone who's still here. Just drop an inline note so the remaining
-    // peers know the original host stepped away.
-    if (was && !present && !amHost) {
-      addMessage({
-        id: `sys-host-away-${Date.now()}`,
-        room: roomHandle,
-        text: `${displayHandle(roomHandle)} stepped away. Room stays open.`,
-        ts: Date.now(),
-        system: true,
-      }, false)
-    } else if (!was && present && !amHost) {
-      addMessage({
-        id: `sys-host-back-${Date.now()}`,
-        room: roomHandle,
-        text: `${displayHandle(roomHandle)} is back.`,
-        ts: Date.now(),
-        system: true,
-      }, false)
-    }
-    updateStatus()
-  }
-  mesh.onPeerJoined = (handle, avatarSeed) => {
-    addMessage({
-      id: `sys-join-${handle}-${Date.now()}`,
-      room: roomHandle,
-      ts: Date.now(),
-      system: true,
-      kind: 'join',
-      joinHandle: handle,
-      joinAvatarSeed: avatarSeed,
-    }, false)
-  }
-
-  mesh.start()
+  // Initial render based on whatever state the background mesh has accumulated.
+  // Always start at the bottom — entering a room means seeing the latest.
+  renderRoomAvatar(room.hostAvatarSeed)
+  renderMessages({ stickToBottom: true })
   renderPeers()
   updateStatus()
+
+  // Save closures so the background mesh's callbacks can drive the UI
+  room.view = { renderRoomAvatar, renderMessages, renderPeers, updateStatus }
+}
+
+// Find every [data-handle] inside `container` whose handle isn't your own,
+// and wire a click that navigates to that handle's room. Centralized so peer
+// chips and message authors share the same behavior.
+function wireHandleClicks(container, myHandle) {
+  container.querySelectorAll('[data-handle]').forEach(node => {
+    const handle = node.getAttribute('data-handle')
+    if (!handle || handle === myHandle) return
+    node.addEventListener('click', (e) => {
+      e.preventDefault()
+      navigateToParty(handle)
+    })
+  })
+}
+
+function unbindPartyView(roomHandle) {
+  const room = liveRooms.get(roomHandle)
+  if (room) room.view = null
+}
+
+function renderParty(roomHandle, me, fragData) {
+  // Unbind whatever room the UI was previously showing — its mesh keeps running
+  // in the background.
+  if (activeRoomHandle && activeRoomHandle !== roomHandle) {
+    unbindPartyView(activeRoomHandle)
+  }
+  activeRoomHandle = roomHandle
+  const room = ensureRoomAlive(roomHandle, me, fragData)
+  bindPartyView(room)
 }
 
 function partyShell(roomHandle, amHost) {
@@ -658,7 +799,10 @@ function partyShell(roomHandle, amHost) {
         </div>
       </div>
       <div class="party-peers" id="peers"></div>
-      <div class="messages" id="messages"></div>
+      <div class="messages-wrap">
+        <div class="messages" id="messages"></div>
+        <button class="unread-badge" id="unread-badge" type="button" aria-live="polite"></button>
+      </div>
       <div class="compose">
         <input class="compose-input" id="compose-input" placeholder="${placeholder}" maxlength="2000" autocomplete="off" />
         <button class="compose-send" id="compose-send" disabled>→</button>
@@ -669,8 +813,12 @@ function partyShell(roomHandle, amHost) {
 
 function renderPeerChip(p, roomHandle) {
   const isHost = p.handle === roomHandle
+  const clickable = !p.self
+  const handleAttr = clickable ? `data-handle="${esc(p.handle)}"` : ''
+  const chipClass = `peer-chip ${isHost ? 'is-host' : ''} ${clickable ? 'is-clickable' : ''}`.trim()
+  const labelTitle = clickable ? ` title="Open ${esc(displayHandle(p.handle))}'s room"` : ''
   return `
-    <div class="peer-chip ${isHost ? 'is-host' : ''}">
+    <div class="${chipClass}" ${handleAttr}${labelTitle}>
       <div class="peer-avatar">${avatarSvg(p.avatarSeed, p.handle)}</div>
       <span>${esc(displayHandle(p.handle))}${p.self ? ' (you)' : ''}</span>
       ${isHost ? '<span class="host-tag">host</span>' : ''}
@@ -683,8 +831,8 @@ function renderMessage(m) {
     if (m.kind === 'join') {
       return `
         <div class="message-join">
-          <div class="message-join-avatar">${avatarSvg(m.joinAvatarSeed, m.joinHandle)}</div>
-          <div class="message-join-label"><strong>${esc(displayHandle(m.joinHandle))}</strong> joined the party</div>
+          <div class="message-join-avatar" data-handle="${esc(m.joinHandle)}">${avatarSvg(m.joinAvatarSeed, m.joinHandle)}</div>
+          <div class="message-join-label"><strong data-handle="${esc(m.joinHandle)}" class="is-clickable">${esc(displayHandle(m.joinHandle))}</strong> joined the party</div>
         </div>
       `
     }
@@ -692,10 +840,10 @@ function renderMessage(m) {
   }
   return `
     <div class="message">
-      <div class="message-avatar">${avatarSvg(m.fromAvatar, m.from)}</div>
+      <div class="message-avatar is-clickable" data-handle="${esc(m.from)}" title="Open ${esc(displayHandle(m.from))}'s room">${avatarSvg(m.fromAvatar, m.from)}</div>
       <div class="message-body">
         <div class="message-meta">
-          <span class="message-handle">${esc(displayHandle(m.from))}</span>
+          <span class="message-handle is-clickable" data-handle="${esc(m.from)}" title="Open ${esc(displayHandle(m.from))}'s room">${esc(displayHandle(m.from))}</span>
           <span class="message-time">${formatTime(m.ts)}</span>
         </div>
         <div class="message-text">${esc(m.text)}</div>
@@ -732,15 +880,30 @@ async function handleShare(roomHandle, me, sessionId, amHost) {
 
 // ==================== ROUTER ====================
 
-function cleanupActiveSession() {
-  if (activeMesh) {
-    activeMesh.leave()
-    activeMesh = null
+// Just unbind the visible UI — meshes for whichever rooms the user has open
+// keep running in the background. They become "true background presence",
+// announcing the user to peers and holding history for joiners. Switching to
+// landing or rooms view should not kick the user out of the rooms they're in.
+function unbindCurrentView() {
+  if (activeRoomHandle) {
+    unbindPartyView(activeRoomHandle)
+    activeRoomHandle = null
   }
-  if (stopFragmentMaintenance) {
-    stopFragmentMaintenance()
-    stopFragmentMaintenance = null
+}
+
+// Full shutdown of every live mesh + fragment maintainer. Called on tab close
+// / pagehide — at that point we really do want to leave everything cleanly so
+// other peers see us drop.
+function tearDownAllRooms() {
+  for (const room of liveRooms.values()) {
+    try { room.mesh && room.mesh.leave() } catch {}
   }
+  liveRooms.clear()
+  for (const stop of ACTIVE_FRAGMENT_MAINTAINER.values()) {
+    try { stop() } catch {}
+  }
+  ACTIVE_FRAGMENT_MAINTAINER.clear()
+  activeRoomHandle = null
 }
 
 function render() {
@@ -749,19 +912,19 @@ function render() {
   const identity = Identity.load()
 
   if (view === 'rooms') {
-    cleanupActiveSession()
+    unbindCurrentView()
     renderRooms(identity)
     return
   }
 
   if (!roomHandle) {
-    cleanupActiveSession()
+    unbindCurrentView()
     renderLanding(identity)
     return
   }
 
   if (!identity) {
-    cleanupActiveSession()
+    unbindCurrentView()
     renderNeedsIdentity(roomHandle, fragData)
     return
   }
@@ -770,7 +933,7 @@ function render() {
 }
 
 window.addEventListener('popstate', render)
-window.addEventListener('pagehide', cleanupActiveSession)
+window.addEventListener('pagehide', tearDownAllRooms)
 
 // ==================== BOOT ====================
 
