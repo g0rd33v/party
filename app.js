@@ -657,16 +657,23 @@ function bindPartyView(room) {
   }
 
   const scrollToBottom = (smooth = false) => {
-    // Defer past layout so scrollHeight reflects the just-rendered content —
-    // doing the write synchronously can race iOS Safari's layout pass and the
-    // scroll silently no-ops.
-    requestAnimationFrame(() => {
-      try {
-        el.messages.scrollTo({ top: el.messages.scrollHeight, behavior: smooth ? 'smooth' : 'auto' })
-      } catch {
-        el.messages.scrollTop = el.messages.scrollHeight
+    // Three-layer write to cover every browser quirk I've hit:
+    //   1. Synchronous scrollTop = scrollHeight right now. Works in desktop
+    //      Chrome/Firefox even if layout hasn't settled; the browser forces a
+    //      layout read to compute scrollHeight.
+    //   2. rAF scrollTop write. Catches cases where late-arriving image decode
+    //      or font load shifts the total height after step 1.
+    //   3. scrollIntoView on the last message element. Most reliable on mobile
+    //      Safari — the browser handles the layout + scroll itself.
+    const jumpNow = () => {
+      try { el.messages.scrollTop = el.messages.scrollHeight } catch {}
+      const last = el.messages.lastElementChild
+      if (last && last.scrollIntoView) {
+        try { last.scrollIntoView({ block: 'end', inline: 'nearest', behavior: smooth ? 'smooth' : 'auto' }) } catch {}
       }
-    })
+    }
+    jumpNow()
+    requestAnimationFrame(jumpNow)
     unreadCount = 0
     updateUnreadBadge()
   }
