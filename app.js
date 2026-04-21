@@ -693,8 +693,14 @@ function bindPartyView(room) {
   }
 
   const renderMessages = (opts = {}) => {
-    const stickToBottom = opts.stickToBottom != null ? opts.stickToBottom : isNearBottom()
+    // New behavior: any new message snaps you to the bottom. The user wants
+    // every chat with new content to stay at the latest. Previous "stay at
+    // your scroll position when scrolled up" logic was per-render; this
+    // overrides it for new arrivals specifically.
     const isNewArrival = !!opts.newArrival
+    const stickToBottom = isNewArrival
+      ? true
+      : (opts.stickToBottom != null ? opts.stickToBottom : isNearBottom())
 
     const seen = new Set()
     const list = room.messages
@@ -705,9 +711,6 @@ function bindPartyView(room) {
 
     if (stickToBottom) {
       scrollToBottom(false)
-    } else if (isNewArrival) {
-      unreadCount += 1
-      updateUnreadBadge()
     }
   }
 
